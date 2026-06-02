@@ -1,0 +1,53 @@
+On the Admin view, add an "All Expense Requests" page that shows:
+A read-only data table of ALL expense requests from all employees across all departments.
+Columns to show in the table (give horizontal scroll for user to scroll with the additional columns that dont fit inside single screen): Request ID, Employee Name, Department, Approving HoD, Category, Amount, Bill Date, Current Status/Stage (Pending/Approved by HoD/Approved by Finance/Rejected), and Last Acted On By/Modified By.
+Filter bar with dropdowns to filter by: Department, Category, Status/Stage and a Bill Date (Range) picker.
+A search bar to search by Employee Name, Department,HoD or Request ID.
+An "Export to CSV" button that downloads the currently filtered/visible data.
+Clicking any row opens a read-only detail Form view showing the full request with any attached receipts or notes and Audit Logs of the request.
+Admin should NOT have action button (eg approve, reject, on hold, send back etc.) nor should Admin have any Edit or delete option - this view is for oversight and reporting only.
+Add summary cards at the top showing: Total Requests, Total Pending, Total Approved, Total Rejected and Total Amount Approved
+Add pagination for the table
+Match existing app theme and styling and name of columns as used in rest of the existing app.
+----
+On the Admin view, create a new "Data Management" page/section with 3 tabs: Employees, Departments and Expense Categories.
+For each tab, build:
+A data table showing all records from the corresponding database table.
+A search/filter bar at the top of each table to search across all columns.
+An "Add New" button above the table that opens a modal form to create a new record
+Edit and Delete action buttons on each row of the table
+Clicking Edit opens a modal form pre-filled with that row's current data
+Clicking Delete shows a confirmation dialog asking "Are you sure you want to delete this record?" with Cancel and Confirm buttons
+Show toast notifications for every action - green success toast when a record is added, updated, or deleted successfully, and red error toast if any operation fails
+Add pagination if the table has more than 15 rows
+Employees tab fields:
+Employee ID (auto-generated, read-only)
+Employee Name (mark as mandatory field)
+Employee Email (mark as mandatory field)
+Department (dropdown populated from Departments table) (mark as mandatory field)
+Status (Active/Inactive)
+Departments tab fields:
+Department ID (auto-generated, read-only)
+Department Name (mark as mandatory field)
+Head of Department (dropdown populated from Employees table) (mark as mandatory field)
+Description
+Status (Active/Inactive)
+Expense Categories tab fields:
+Category ID (auto-generated, read-only)
+Category Name (mark as mandatory field)
+Description
+Budget Limit (if applicable)
+Status (Active/Inactive)
+Form validation rules:
+Name and Email fields are required
+Email must be valid format
+No duplicate Department Names, Employee ID or Category Names allowed
+Show inline validation errors on the form
+Styling:
+Match the existing app's design theme and colors
+Use the same component library already used in the app
+Tables should be responsive and scrollable on mobile
+Modal forms should have clear Cancel and Save buttons
+Connect all tables to the existing database. 
+These tables used to linked with the New Expense Request and if there is any change in any of these tables, same should reflect in any new or existing requests (eg change in HoD of a department or Expense Limit or any change or addition in the Category or Employee should show in the new expense request).
+If any field/column names differs from what is used in the app, use the names used in the app to maintain symmetry.
