@@ -459,9 +459,25 @@ export async function registerRoutes(
     }
   });
 
+  // Any authenticated user can read the current company policy
+  app.get("/api/policy", authMiddleware, async (_req, res) => {
+    try {
+      const raw = await storage.getSetting("company_policy");
+      res.json({ policy: raw ? JSON.parse(raw) : null });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Only admins can publish a new policy; persists to DB so all users see it
   app.post("/api/policy", authMiddleware, adminOnly, async (req, res) => {
     try {
-      res.json({ success: true, message: "Policy saved successfully" });
+      const { policy } = req.body;
+      if (!policy || typeof policy !== "object") {
+        return res.status(400).json({ message: "policy payload is required" });
+      }
+      await storage.setSetting("company_policy", JSON.stringify(policy));
+      res.json({ success: true, message: "Policy published. All users will see the update on next page load." });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

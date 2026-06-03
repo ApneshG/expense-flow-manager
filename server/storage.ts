@@ -3,7 +3,7 @@ import { db } from "./db";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import {
-  users, departments, expenses, auditLogs, sessions, invitations, inviteRequests, expenseCategories, employees,
+  users, departments, expenses, auditLogs, sessions, invitations, inviteRequests, expenseCategories, employees, settings,
   type User, type InsertUser,
   type Department, type InsertDepartment,
   type Expense, type InsertExpense,
@@ -62,6 +62,8 @@ export interface IStorage {
   createEmployee(data: InsertEmployee): Promise<Employee>;
   updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee | undefined>;
   deleteEmployee(id: string): Promise<void>;
+  getSetting(key: string): Promise<string | undefined>;
+  setSetting(key: string, value: string): Promise<void>;
   seedData(): Promise<void>;
 }
 
@@ -161,6 +163,22 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDepartment(id: string): Promise<void> {
     await db.delete(departments).where(eq(departments.id, id));
+  }
+
+  async getSetting(key: string): Promise<string | undefined> {
+    const [row] = await db.select().from(settings).where(eq(settings.key, key));
+    return row?.value;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    const now = new Date().toISOString();
+    await db
+      .insert(settings)
+      .values({ key, value, updatedAt: now })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value, updatedAt: now },
+      });
   }
 
   async getEmployees(): Promise<Employee[]> {

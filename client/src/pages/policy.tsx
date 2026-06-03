@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface PolicyData {
   generalRules: string[];
@@ -46,6 +47,7 @@ const defaultPolicy: PolicyData = {
 export default function PolicyPage() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [publishedPolicy, setPublishedPolicy] = useState<PolicyData>(defaultPolicy);
   const [draftPolicy, setDraftPolicy] = useState<PolicyData>(defaultPolicy);
@@ -53,14 +55,17 @@ export default function PolicyPage() {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [localChanges, setLocalChanges] = useState<Partial<PolicyData>>({});
 
+  // Load the published policy from the server so every user sees the same thing.
+  const { data: policyResponse } = useQuery<{ policy: PolicyData | null }>({
+    queryKey: ["/api/policy"],
+  });
+
   useEffect(() => {
-    const saved = localStorage.getItem("company_policy");
-    if (saved) {
-      const policy = JSON.parse(saved);
-      setPublishedPolicy(policy);
-      setDraftPolicy(policy);
+    if (policyResponse?.policy) {
+      setPublishedPolicy(policyResponse.policy);
+      setDraftPolicy(policyResponse.policy);
     }
-  }, []);
+  }, [policyResponse]);
 
   const startEditingSection = (section: string) => {
     setEditingSection(section);
@@ -86,10 +91,13 @@ export default function PolicyPage() {
 
   const handlePublish = async () => {
     try {
-      setPublishedPolicy(draftPolicy);
-      localStorage.setItem("company_policy", JSON.stringify(draftPolicy));
-      await apiRequest("POST", "/api/policy", { policy: draftPolicy });
-      toast({ title: "Policy published successfully to all users" });
+      // Persist any unsaved field edits before publishing
+      const finalPolicy = { ...draftPolicy, ...localChanges };
+      await apiRequest("POST", "/api/policy", { policy: finalPolicy });
+      setPublishedPolicy(finalPolicy);
+      setDraftPolicy(finalPolicy);
+      queryClient.invalidateQueries({ queryKey: ["/api/policy"] });
+      toast({ title: "Policy published. All users will see the update on next page load." });
       setEditingSection(null);
       setLocalChanges({});
     } catch (error: any) {

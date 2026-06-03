@@ -91,6 +91,12 @@ export const inviteRequests = pgTable("invite_requests", {
   createdAt: text("created_at").notNull(),
 });
 
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const employees = pgTable("employees", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
@@ -130,6 +136,7 @@ export type Invitation = typeof invitations.$inferSelect;
 export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 export type InsertExpenseCategory = z.infer<typeof insertCategorySchema>;
+export type Setting = typeof settings.$inferSelect;
 
 export const CATEGORY_LIMITS: Record<string, number> = {
   "Air Tickets": 2000,

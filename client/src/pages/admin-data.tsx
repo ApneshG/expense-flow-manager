@@ -90,7 +90,7 @@ function EmployeesManager() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search employees..." className="pl-8" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <Button onClick={() => { setEditingItem(null); setIsModalOpen(true); }}><Plus className="w-4 h-4 mr-2" /> Add Employee</Button>
+        {/* "Add Employee" hidden — every non-admin user is auto-added to Employees on creation via Invite User. */}
       </CardHeader>
       <CardContent>
         <Table>

@@ -20,6 +20,22 @@ export default function RequestInvitePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Email format validation: must contain @ and .
+    const trimmed = email.trim();
+    if (!trimmed.includes("@") && !trimmed.includes(".")) {
+      setError("Email must contain '@' and '.' (e.g. user@example.com)");
+      return;
+    }
+    if (!trimmed.includes("@")) {
+      setError("Email must contain '@' (e.g. user@example.com)");
+      return;
+    }
+    if (!trimmed.includes(".")) {
+      setError("Email must contain '.' (e.g. user@example.com)");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/request-invite", {

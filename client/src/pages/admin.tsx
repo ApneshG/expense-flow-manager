@@ -532,8 +532,22 @@ function InviteForm() {
             onSubmit={(e) => {
               e.preventDefault();
               setValidationError("");
-              if (existingUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-                setValidationError(`This user email id already exists: ${email}`);
+              // Email format validation: must contain @ and .
+              const trimmed = email.trim();
+              if (!trimmed.includes("@") && !trimmed.includes(".")) {
+                setValidationError("Email must contain '@' and '.' (e.g. user@example.com)");
+                return;
+              }
+              if (!trimmed.includes("@")) {
+                setValidationError("Email must contain '@' (e.g. user@example.com)");
+                return;
+              }
+              if (!trimmed.includes(".")) {
+                setValidationError("Email must contain '.' (e.g. user@example.com)");
+                return;
+              }
+              if (existingUsers.some(u => u.email.toLowerCase() === trimmed.toLowerCase())) {
+                setValidationError("This user email id already exists");
                 return;
               }
               if (["employee", "hod"].includes(role) && !departmentId) {
