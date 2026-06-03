@@ -17,24 +17,25 @@ export default function RequestInvitePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
+  // Live email validation — shown directly below the email field.
+  const trimmedEmail = email.trim();
+  let emailError = "";
+  if (trimmedEmail.length > 0) {
+    const hasAt = trimmedEmail.includes("@");
+    const hasDot = trimmedEmail.includes(".");
+    if (!hasAt && !hasDot) {
+      emailError = "Email must contain '@' and '.' (e.g. user@example.com)";
+    } else if (!hasAt) {
+      emailError = "Email must contain '@' (e.g. user@example.com)";
+    } else if (!hasDot) {
+      emailError = "Email must contain '.' (e.g. user@example.com)";
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    // Email format validation: must contain @ and .
-    const trimmed = email.trim();
-    if (!trimmed.includes("@") && !trimmed.includes(".")) {
-      setError("Email must contain '@' and '.' (e.g. user@example.com)");
-      return;
-    }
-    if (!trimmed.includes("@")) {
-      setError("Email must contain '@' (e.g. user@example.com)");
-      return;
-    }
-    if (!trimmed.includes(".")) {
-      setError("Email must contain '.' (e.g. user@example.com)");
-      return;
-    }
+    if (emailError) return;
 
     setIsLoading(true);
     try {
@@ -124,8 +125,14 @@ export default function RequestInvitePage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={!!emailError}
                   data-testid="input-request-email"
                 />
+                {emailError && (
+                  <p className="text-sm text-destructive" data-testid="error-request-email">
+                    {emailError}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="department">Preferred Department</Label>
@@ -152,7 +159,7 @@ export default function RequestInvitePage() {
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-2"
-                disabled={isLoading}
+                disabled={isLoading || !!emailError || !email || !name}
                 data-testid="button-submit-request"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}

@@ -479,6 +479,24 @@ function InviteForm() {
   });
   const existingUsers = adminData?.users || [];
 
+  // Live email validation — shown directly below the email field.
+  // Empty input shows no error (don't nag users before they've typed anything).
+  const trimmedEmail = email.trim();
+  let emailError = "";
+  if (trimmedEmail.length > 0) {
+    const hasAt = trimmedEmail.includes("@");
+    const hasDot = trimmedEmail.includes(".");
+    if (!hasAt && !hasDot) {
+      emailError = "Email must contain '@' and '.' (e.g. user@example.com)";
+    } else if (!hasAt) {
+      emailError = "Email must contain '@' (e.g. user@example.com)";
+    } else if (!hasDot) {
+      emailError = "Email must contain '.' (e.g. user@example.com)";
+    } else if (existingUsers.some(u => u.email.toLowerCase() === trimmedEmail.toLowerCase())) {
+      emailError = "This user email id already exists";
+    }
+  }
+
   const inviteMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/invite", {
@@ -532,24 +550,8 @@ function InviteForm() {
             onSubmit={(e) => {
               e.preventDefault();
               setValidationError("");
-              // Email format validation: must contain @ and .
-              const trimmed = email.trim();
-              if (!trimmed.includes("@") && !trimmed.includes(".")) {
-                setValidationError("Email must contain '@' and '.' (e.g. user@example.com)");
-                return;
-              }
-              if (!trimmed.includes("@")) {
-                setValidationError("Email must contain '@' (e.g. user@example.com)");
-                return;
-              }
-              if (!trimmed.includes(".")) {
-                setValidationError("Email must contain '.' (e.g. user@example.com)");
-                return;
-              }
-              if (existingUsers.some(u => u.email.toLowerCase() === trimmed.toLowerCase())) {
-                setValidationError("This user email id already exists");
-                return;
-              }
+              // Email-specific errors are shown live below the email field.
+              if (emailError) return;
               if (["employee", "hod"].includes(role) && !departmentId) {
                 setValidationError("Department is required for this role");
                 return;
@@ -570,8 +572,14 @@ function InviteForm() {
                   setEmail(e.target.value);
                   setValidationError("");
                 }}
+                aria-invalid={!!emailError}
                 data-testid="input-invite-email"
               />
+              {emailError && (
+                <p className="text-sm text-destructive" data-testid="error-invite-email">
+                  {emailError}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="invite-name">Name *</Label>
@@ -618,7 +626,7 @@ function InviteForm() {
             <Button
               type="submit"
               className="w-full"
-              disabled={inviteMutation.isPending || !email || !name || !role || (["employee", "hod"].includes(role) && !departmentId) || existingUsers.some(u => u.email.toLowerCase() === email.toLowerCase())}
+              disabled={inviteMutation.isPending || !email || !name || !role || !!emailError || (["employee", "hod"].includes(role) && !departmentId)}
               data-testid="button-send-invite"
             >
               {inviteMutation.isPending ? (
