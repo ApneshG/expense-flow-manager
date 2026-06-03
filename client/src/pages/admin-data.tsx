@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -45,8 +46,8 @@ function EmployeesManager() {
   const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ["/api/users"] });
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ["/api/departments"] });
   
-  // Filter users to show only employees and HoDs for the dropdown
-  const employeeAndHoDUsers = users.filter(u => u.role === "employee" || u.role === "hod");
+  // Filter users to show only employees, HoDs and finance_head (everyone except admin) for the dropdown
+  const employeeAndHoDUsers = users.filter(u => u.role !== "admin");
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
@@ -70,7 +71,10 @@ function EmployeesManager() {
     }
   });
 
-  const filtered = users.filter(u => (u.role === "employee" || u.role === "hod") && (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())));
+  const filtered = users.filter(u => u.role !== "admin" && (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())));
+
+  const formatRole = (role: string) =>
+    role.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 
   return (
     <Card>
@@ -83,13 +87,13 @@ function EmployeesManager() {
       </CardHeader>
       <CardContent>
         <Table>
-          <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Dept</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Dept</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
           <TableBody>
             {filtered.map(u => (
               <TableRow key={u.id}>
-                <TableCell className="text-xs font-mono">{u.id}</TableCell>
                 <TableCell className="font-medium">{u.name}</TableCell>
                 <TableCell>{u.email}</TableCell>
+                <TableCell>{formatRole(u.role)}</TableCell>
                 <TableCell>{departments.find(d => d.id === u.departmentId)?.name}</TableCell>
                 <TableCell className="capitalize">{u.status}</TableCell>
                 <TableCell className="flex gap-1">
@@ -222,7 +226,7 @@ function DeptForm({ users, initialData, onSubmit, isPending }: any) {
   const [formData, setFormData] = useState(initialData || { id: `dept-${Date.now()}`, name: "", hodId: "", annualBudget: 0 });
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="space-y-4 pt-4">
-      <div className="space-y-2"><Label>ID (Slug)</Label><Input disabled={!!initialData} required value={formData.id} onChange={e => setFormData({ ...formData, id: e.target.value })} /></div>
+      <div className="space-y-2"><Label>ID (auto-generated)</Label><Input disabled required value={formData.id} /></div>
       <div className="space-y-2"><Label>Name *</Label><Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
       <div className="space-y-2">
         <Label>Head of Department *</Label>
@@ -265,11 +269,12 @@ function CategoriesManager() {
       </CardHeader>
       <CardContent>
         <Table>
-          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Limit</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead>Limit</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
           <TableBody>
             {categories.map(c => (
               <TableRow key={c.id}>
                 <TableCell className="font-medium">{c.name}</TableCell>
+                <TableCell className="max-w-xs truncate text-muted-foreground" title={c.description || ""}>{c.description || "-"}</TableCell>
                 <TableCell>${c.budgetLimit?.toLocaleString() || "-"}</TableCell>
                 <TableCell className="capitalize">{c.status}</TableCell>
                 <TableCell className="flex gap-1">
@@ -292,11 +297,20 @@ function CategoriesManager() {
 }
 
 function CategoryForm({ initialData, onSubmit }: any) {
-  const [formData, setFormData] = useState(initialData || { name: "", budgetLimit: 0, status: "active" });
+  const [formData, setFormData] = useState(initialData || { name: "", description: "", budgetLimit: 0, status: "active" });
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
-      <div><Label>Name</Label><Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
-      <div><Label>Limit ($)</Label><Input type="number" required value={formData.budgetLimit} onChange={e => setFormData({ ...formData, budgetLimit: parseFloat(e.target.value) })} /></div>
+      <div className="space-y-2"><Label>Name *</Label><Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
+      <div className="space-y-2">
+        <Label>Category Description</Label>
+        <Textarea
+          rows={4}
+          placeholder="Describe what this category covers — e.g. allowed expense types, examples, policy notes…"
+          value={formData.description || ""}
+          onChange={e => setFormData({ ...formData, description: e.target.value })}
+        />
+      </div>
+      <div className="space-y-2"><Label>Limit ($) *</Label><Input type="number" required value={formData.budgetLimit} onChange={e => setFormData({ ...formData, budgetLimit: parseFloat(e.target.value) })} /></div>
       <Button type="submit" className="w-full">Save</Button>
     </form>
   );

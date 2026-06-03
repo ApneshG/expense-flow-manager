@@ -81,18 +81,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(data: Omit<InsertUser, "id"> & { id?: string }): Promise<User> {
+    const normalizedEmail = data.email.toLowerCase();
+
+    // Email uniqueness check (against users table) — friendly message
+    const existing = await db.select().from(users).where(eq(users.email, normalizedEmail));
+    if (existing.length > 0) {
+      throw new Error(
+        `Duplicate email id detected. The email id ${data.email} is already existing. Pls use a different email id`
+      );
+    }
+
     const id = data.id || `u-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const hashedPassword = await bcrypt.hash(data.password || "password", 10);
     const [user] = await db.insert(users).values({
       ...data,
       id,
-      email: data.email.toLowerCase(),
+      email: normalizedEmail,
       password: hashedPassword,
       status: data.status || "active",
     }).returning();
-    
-    // Auto-add to employees table if role is employee or hod
-    if (["employee", "hod"].includes(user.role)) {
+
+    // Auto-add to employees table for every non-admin user
+    // (admin is a system role, not a company employee)
+    if (user.role !== "admin") {
       try {
         await db.insert(employees).values({
           id: `emp-${user.id}`,
@@ -106,7 +117,7 @@ export class DatabaseStorage implements IStorage {
         console.error("Error adding employee:", err);
       }
     }
-    
+
     return user;
   }
 

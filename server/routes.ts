@@ -635,7 +635,9 @@ export async function registerRoutes(
       }
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ message: "An account with this email already exists. Please log in." });
+        return res.status(400).json({
+          message: `Duplicate email id detected. The email id ${email} is already existing. Pls use a different email id`,
+        });
       }
       const request = await storage.createInviteRequest({
         name,
