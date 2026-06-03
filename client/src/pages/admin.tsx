@@ -1021,8 +1021,7 @@ function BulkAddForm() {
           <Upload className="w-5 h-5" /> Bulk Add Users
         </CardTitle>
         <CardDescription>
-          Add multiple users at once via CSV format. Users can select
-          departments after joining.
+          Add multiple users at once via CSV format.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
