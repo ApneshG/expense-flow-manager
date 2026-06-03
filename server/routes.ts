@@ -783,6 +783,11 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  app.get("/api/admin/employees", authMiddleware, adminOnly, async (_req, res) => {
+    const employees = await storage.getEmployees();
+    res.json(employees);
+  });
+
   app.post("/api/admin/employees", authMiddleware, adminOnly, async (req, res) => {
     try {
       const user = await storage.createUser(req.body);

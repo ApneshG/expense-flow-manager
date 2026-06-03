@@ -533,7 +533,7 @@ function InviteForm() {
               e.preventDefault();
               setValidationError("");
               if (existingUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-                setValidationError("This user email id already exists");
+                setValidationError(`This user email id already exists: ${email}`);
                 return;
               }
               if (["employee", "hod"].includes(role) && !departmentId) {

@@ -45,9 +45,14 @@ function EmployeesManager() {
 
   const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ["/api/users"] });
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ["/api/departments"] });
-  
-  // Filter users to show only employees, HoDs and finance_head (everyone except admin) for the dropdown
-  const employeeAndHoDUsers = users.filter(u => u.role !== "admin");
+  const { data: employees = [] } = useQuery<{ userId: string }[]>({ queryKey: ["/api/admin/employees"] });
+
+  // For the Add Employee dropdown: candidates are non-admin users
+  // who are NOT already in the employees table.
+  const existingEmployeeUserIds = new Set(employees.map(e => e.userId));
+  const employeeAndHoDUsers = users.filter(
+    u => u.role !== "admin" && !existingEmployeeUserIds.has(u.id),
+  );
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
@@ -56,6 +61,7 @@ function EmployeesManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
       setIsModalOpen(false);
       setEditingItem(null);
       toast({ title: `Employee ${editingItem ? "updated" : "added"} successfully` });
@@ -67,6 +73,7 @@ function EmployeesManager() {
     mutationFn: async (id: string) => apiRequest("DELETE", `/api/admin/users/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
       toast({ title: "Employee deleted" });
     }
   });
@@ -248,6 +255,9 @@ function CategoriesManager() {
   const [editingItem, setEditingItem] = useState<ExpenseCategory | null>(null);
 
   const { data: categories = [] } = useQuery<ExpenseCategory[]>({ queryKey: ["/api/admin/categories"] });
+  const sortedCategories = [...categories].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
@@ -269,18 +279,18 @@ function CategoriesManager() {
       </CardHeader>
       <CardContent>
         <Table>
-          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead>Limit</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Limit</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead><TableHead>Description</TableHead></TableRow></TableHeader>
           <TableBody>
-            {categories.map(c => (
+            {sortedCategories.map(c => (
               <TableRow key={c.id}>
                 <TableCell className="font-medium">{c.name}</TableCell>
-                <TableCell className="max-w-xs truncate text-muted-foreground" title={c.description || ""}>{c.description || "-"}</TableCell>
                 <TableCell>${c.budgetLimit?.toLocaleString() || "-"}</TableCell>
                 <TableCell className="capitalize">{c.status}</TableCell>
                 <TableCell className="flex gap-1">
                   <Button variant="ghost" size="icon" onClick={() => { setEditingItem(c); setIsModalOpen(true); }}><Pencil className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" className="text-destructive" onClick={() => confirm("Delete category?") && apiRequest("DELETE", `/api/admin/categories/${c.id}`).then(() => queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] }))}><Trash2 className="w-4 h-4" /></Button>
                 </TableCell>
+                <TableCell className="max-w-xs truncate text-muted-foreground" title={c.description || ""}>{c.description || "-"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -301,6 +311,7 @@ function CategoryForm({ initialData, onSubmit }: any) {
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
       <div className="space-y-2"><Label>Name *</Label><Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
+      <div className="space-y-2"><Label>Limit ($) *</Label><Input type="number" required value={formData.budgetLimit} onChange={e => setFormData({ ...formData, budgetLimit: parseFloat(e.target.value) })} /></div>
       <div className="space-y-2">
         <Label>Category Description</Label>
         <Textarea
@@ -310,7 +321,6 @@ function CategoryForm({ initialData, onSubmit }: any) {
           onChange={e => setFormData({ ...formData, description: e.target.value })}
         />
       </div>
-      <div className="space-y-2"><Label>Limit ($) *</Label><Input type="number" required value={formData.budgetLimit} onChange={e => setFormData({ ...formData, budgetLimit: parseFloat(e.target.value) })} /></div>
       <Button type="submit" className="w-full">Save</Button>
     </form>
   );
