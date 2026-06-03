@@ -540,8 +540,7 @@ function InviteForm() {
           <UserPlus className="w-5 h-5" /> Invite New User
         </CardTitle>
         <CardDescription>
-          Send an invitation to a new user. They can select their department
-          after joining.
+          Send an invitation to a new user.
         </CardDescription>
       </CardHeader>
       <CardContent>
