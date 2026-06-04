@@ -221,6 +221,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      // A newly raised expense bumps Budget Utilized — refresh dept totals.
+      queryClient.invalidateQueries({ queryKey: ["/api/departments"] });
     },
   });
 
@@ -241,6 +243,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      // Deleting a counted expense frees up budget — refresh dept totals.
+      queryClient.invalidateQueries({ queryKey: ["/api/departments"] });
     },
   });
 

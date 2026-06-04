@@ -307,9 +307,8 @@ export async function registerRoutes(
         });
       }
 
-      if (updates.status === "paid" && previousStatus !== "paid") {
-        await storage.updateDepartmentSpent(expense.departmentId, expense.amount);
-      }
+      // Note: department.spent is computed dynamically from expense statuses
+      // in storage.getDepartments() — no manual increment needed here.
 
       // Send email notifications based on status change
       const employee = await storage.getUser(expense.employeeId);

@@ -143,13 +143,33 @@ export class DatabaseStorage implements IStorage {
     await db.delete(users).where(eq(users.id, id));
   }
 
+  // Budget Utilized = sum of expense amounts that are still in the workflow
+  // OR have been paid. Drafts/withdrawn and any rejected request do NOT count.
+  // Computed live so admin/HoD always see real-time utilization.
+  private static readonly BUDGET_COUNTED_STATUSES = sql`status IN ('pending_hod', 'needs_revision', 'pending_finance', 'on_hold', 'paid')`;
+
   async getDepartments(): Promise<Department[]> {
-    return await db.select().from(departments);
+    const depts = await db.select().from(departments);
+    const utilization = await db
+      .select({
+        departmentId: expenses.departmentId,
+        total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
+      })
+      .from(expenses)
+      .where(DatabaseStorage.BUDGET_COUNTED_STATUSES)
+      .groupBy(expenses.departmentId);
+    const spentByDept = new Map(utilization.map(u => [u.departmentId, Number(u.total) || 0]));
+    return depts.map(d => ({ ...d, spent: spentByDept.get(d.id) ?? 0 }));
   }
 
   async getDepartment(id: string): Promise<Department | undefined> {
     const [dept] = await db.select().from(departments).where(eq(departments.id, id));
-    return dept;
+    if (!dept) return undefined;
+    const [util] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)` })
+      .from(expenses)
+      .where(and(eq(expenses.departmentId, id), DatabaseStorage.BUDGET_COUNTED_STATUSES));
+    return { ...dept, spent: Number(util?.total) || 0 };
   }
 
   async createDepartment(data: InsertDepartment): Promise<Department> {
