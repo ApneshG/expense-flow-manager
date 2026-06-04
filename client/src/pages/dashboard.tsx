@@ -1,6 +1,6 @@
 import { ExpenseRequest, useApp } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, LabelList } from "recharts";
 import { format, isWithinInterval, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, differenceInDays } from "date-fns";
 import { CreditCard, CalendarIcon, Clock, Search, Download, Filter, Banknote, XCircle, CheckCircle2, Activity, Users, Wallet, AlertCircle, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -412,46 +412,59 @@ export default function Dashboard() {
   if (currentUser.role === "hod") {
     const dept = departments.find(d => d.id === currentUser.departmentId);
     const budget = getDepartmentBudget(currentUser.departmentId);
-    
-    // Filter logic for HoD specific view
-    const deptExpenses = filteredExpenses.filter(e => e.departmentId === currentUser.departmentId && e.status !== 'draft');
-    
-    const pendingCount = expenses.filter(e => e.hodId === currentUser.id && e.status === 'pending_hod').length;
 
-    // Category Spend Data
-    const categoryData = deptExpenses.reduce((acc, curr) => {
-        const existing = acc.find(item => item.name === curr.category);
-        if (existing) {
-            existing.value += curr.amount;
-        } else {
-            acc.push({ name: curr.category, value: curr.amount });
-        }
+    // Budget category buckets — same definition used by backend's spent calc.
+    const PAID_STATUSES = ["paid"];
+    const COMMITTED_UNPAID_STATUSES = ["pending_hod", "needs_revision", "pending_finance", "on_hold"];
+
+    // Full dept dataset (don't apply top-bar filters to KPI cards).
+    const deptAllExpenses = expenses.filter(e => e.departmentId === currentUser.departmentId);
+    const paidTotal = deptAllExpenses
+        .filter(e => PAID_STATUSES.includes(e.status))
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const committedUnpaidTotal = deptAllExpenses
+        .filter(e => COMMITTED_UNPAID_STATUSES.includes(e.status))
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const pct = (v: number) => budget.allocated > 0 ? ((v / budget.allocated) * 100).toFixed(1) : "0";
+
+    // Action Required counters (HoD's own queue).
+    const pendingApprovalCount = expenses.filter(e => e.hodId === currentUser.id && e.status === "pending_hod").length;
+    const onHoldCount = deptAllExpenses.filter(e => e.status === "on_hold").length;
+    const needsRevisionCount = deptAllExpenses.filter(e => e.status === "needs_revision").length;
+    const actionTotal = pendingApprovalCount + onHoldCount + needsRevisionCount;
+
+    // Top 5 spenders (paid + committed unpaid), respecting top-bar filters.
+    const filteredDeptExpenses = filteredExpenses
+        .filter(e => e.departmentId === currentUser.departmentId
+            && [...PAID_STATUSES, ...COMMITTED_UNPAID_STATUSES].includes(e.status));
+    const spendByEmp = filteredDeptExpenses.reduce((acc, e) => {
+        const cur = acc.get(e.employeeId) || { paid: 0, committed: 0 };
+        if (e.status === "paid") cur.paid += Number(e.amount) || 0;
+        else cur.committed += Number(e.amount) || 0;
+        acc.set(e.employeeId, cur);
         return acc;
-    }, [] as { name: string, value: number }[]);
+    }, new Map<string, { paid: number; committed: number }>());
+    const topSpenders = Array.from(spendByEmp.entries())
+        .map(([id, v]) => ({
+            name: (users.find(u => u.id === id)?.name || id).split(" ")[0],
+            total: v.paid + v.committed,
+            paid: v.paid,
+            committed: v.committed,
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
 
-    // Monthly Trend Data (Last 6 months)
-    const months = eachMonthOfInterval({
-        start: subMonths(new Date(), 5),
-        end: new Date()
-    });
-    
-    const trendData = months.map(month => {
-        const monthStart = startOfMonth(month);
-        const monthEnd = endOfMonth(month);
-        
-        const monthlyTotal = deptExpenses
-            .filter(e => {
-                if (!e.billDate) return false;
-                const date = parseISO(e.billDate);
-                return isWithinInterval(date, { start: monthStart, end: monthEnd });
-            })
-            .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-            
-        return {
-            name: format(month, "MMM"),
-            amount: monthlyTotal
-        };
-    });
+    // Category breakdown with $ values (excludes rejected/draft, respects filters).
+    const categoryData = filteredExpenses
+        .filter(e => e.departmentId === currentUser.departmentId
+            && [...PAID_STATUSES, ...COMMITTED_UNPAID_STATUSES].includes(e.status))
+        .reduce((acc, curr) => {
+            const existing = acc.find(item => item.name === curr.category);
+            if (existing) existing.value += Number(curr.amount) || 0;
+            else acc.push({ name: curr.category, value: Number(curr.amount) || 0 });
+            return acc;
+        }, [] as { name: string; value: number }[])
+        .sort((a, b) => b.value - a.value);
 
     return (
       <div className="space-y-6">
@@ -512,11 +525,39 @@ export default function Dashboard() {
             </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <Card className={cn(
-                budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "border-destructive/50 bg-destructive/5" : 
+        {/* Row 1: 4 KPI cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Annual Budget</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">${budget.allocated.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Fiscal allocation</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Paid Expenses</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold text-emerald-600">${paidTotal.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground mt-1">{pct(paidTotal)}% of annual</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Committed Unpaid Expenses</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold text-amber-600">${committedUnpaidTotal.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground mt-1">{pct(committedUnpaidTotal)}% · in approval queue</p>
+                </CardContent>
+            </Card>
+            <Card className={cn(
+                budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "border-destructive/50 bg-destructive/5" :
                 budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "border-amber-500/50 bg-amber-500/5" : ""
-             )}>
+            )}>
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
                         Available Budget
@@ -528,76 +569,122 @@ export default function Dashboard() {
                     <div className={cn(
                         "text-2xl font-bold",
                         budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "text-destructive" :
-                        budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "text-amber-600" : "text-emerald-600"
+                        budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "text-amber-600" : "text-blue-600"
                     )}>${budget.remaining.toLocaleString()}</div>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Budget Utilized</CardTitle></CardHeader>
-                <CardContent>
-                    <div className={cn(
-                        "text-2xl font-bold",
-                        budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "text-destructive" :
-                        budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "text-amber-600" : ""
-                    )}>{budget.allocated > 0 ? ((budget.spent / budget.allocated) * 100).toFixed(1) : 0}%</div>
-                    <div className="w-full bg-muted rounded-full h-2 mt-3">
-                        <div className={cn(
-                            "h-2 rounded-full",
-                            budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "bg-destructive" :
-                            budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "bg-amber-500" : "bg-primary"
-                        )} style={{ width: `${budget.allocated > 0 ? Math.min((budget.spent / budget.allocated) * 100, 100) : 0}%` }}></div>
-                    </div>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Pending Approvals</CardTitle></CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{pendingCount}</div>
-                    <Link href="/approvals"><Button variant="link" className="px-0 h-auto text-xs mt-1">Review Queue &rarr;</Button></Link>
+                    <p className="text-xs text-muted-foreground mt-1">{pct(budget.remaining)}% remaining</p>
                 </CardContent>
             </Card>
         </div>
 
+        {/* Row 2: Action Required */}
+        <Card className="border-l-4 border-l-amber-400">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-500" /> Action Required
+                </CardTitle>
+                <CardDescription>What needs your attention right now</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {actionTotal === 0 ? (
+                    <div className="flex items-center gap-2 text-emerald-700 text-sm py-2">
+                        <CheckCircle2 className="w-5 h-5" /> All caught up — nothing pending in your queue.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <Link href="/approvals">
+                            <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 hover:shadow-sm transition-all cursor-pointer">
+                                <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold uppercase tracking-wide">
+                                    <Clock className="w-4 h-4" /> Awaiting Your Approval
+                                </div>
+                                <div className="text-3xl font-bold text-amber-900 mt-1">{pendingApprovalCount}</div>
+                                <p className="text-xs text-amber-700 mt-1">Review queue →</p>
+                            </div>
+                        </Link>
+                        <Link href="/approvals">
+                            <div className="p-4 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 hover:shadow-sm transition-all cursor-pointer">
+                                <div className="flex items-center gap-2 text-orange-700 text-xs font-semibold uppercase tracking-wide">
+                                    <Activity className="w-4 h-4" /> On Hold
+                                </div>
+                                <div className="text-3xl font-bold text-orange-900 mt-1">{onHoldCount}</div>
+                                <p className="text-xs text-orange-700 mt-1">Needs follow-up →</p>
+                            </div>
+                        </Link>
+                        <Link href="/approvals">
+                            <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:shadow-sm transition-all cursor-pointer">
+                                <div className="flex items-center gap-2 text-rose-700 text-xs font-semibold uppercase tracking-wide">
+                                    <AlertCircle className="w-4 h-4" /> Needs Revision
+                                </div>
+                                <div className="text-3xl font-bold text-rose-900 mt-1">{needsRevisionCount}</div>
+                                <p className="text-xs text-rose-700 mt-1">Waiting on employee →</p>
+                            </div>
+                        </Link>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+
+        {/* Row 3: Top Spenders + Category Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="h-[350px]">
+            <Card>
                 <CardHeader>
-                    <CardTitle>Spending Trend</CardTitle>
-                    <CardDescription>Monthly expense volume over the last 6 months</CardDescription>
+                    <CardTitle>Top 5 Spenders</CardTitle>
+                    <CardDescription>Paid + Committed Unpaid by employee</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <AreaChart data={trendData}>
-                             <defs>
-                                <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                            <YAxis axisLine={false} tickLine={false} />
-                            <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                            <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAmount)" />
-                        </AreaChart>
-                    </ResponsiveContainer>
+                    {topSpenders.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-8 text-center">No spending data for the selected filters.</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={Math.max(160, topSpenders.length * 48)}>
+                            <BarChart data={topSpenders} layout="vertical" margin={{ top: 8, right: 80, left: 8, bottom: 8 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11, fill: "#64748b" }} />
+                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={80} tick={{ fontSize: 12, fill: "#0f172a" }} />
+                                <Tooltip
+                                    cursor={{ fill: "transparent" }}
+                                    contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                                    formatter={(value: number, name: string) => [`$${Number(value).toLocaleString()}`, name === "paid" ? "Paid" : name === "committed" ? "Committed Unpaid" : "Total"]}
+                                />
+                                <Bar dataKey="paid" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} barSize={22} />
+                                <Bar dataKey="committed" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={22}>
+                                    <LabelList dataKey="total" position="right" formatter={(v: number) => `$${Number(v).toLocaleString()}`} className="text-xs fill-slate-700" />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                    {topSpenders.length > 0 && (
+                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Paid</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /> Committed Unpaid</span>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
-            <Card className="h-[350px]">
+            <Card>
                 <CardHeader>
-                    <CardTitle>Category Breakdown</CardTitle>
-                    <CardDescription>Expenses by category for the selected period</CardDescription>
+                    <CardTitle>Spending by Category</CardTitle>
+                    <CardDescription>Paid + Committed Unpaid, sorted by amount</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={categoryData} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" hide />
-                            <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} />
-                            <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                            <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    {categoryData.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-8 text-center">No spending data for the selected filters.</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={Math.max(160, categoryData.length * 44)}>
+                            <BarChart data={categoryData} layout="vertical" margin={{ top: 8, right: 80, left: 8, bottom: 8 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11, fill: "#64748b" }} />
+                                <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#0f172a" }} />
+                                <Tooltip
+                                    cursor={{ fill: "transparent" }}
+                                    contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                                    formatter={(value: number) => [`$${Number(value).toLocaleString()}`, "Amount"]}
+                                />
+                                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20}>
+                                    <LabelList dataKey="value" position="right" formatter={(v: number) => `$${Number(v).toLocaleString()}`} className="text-xs fill-slate-700" />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
                 </CardContent>
             </Card>
         </div>
