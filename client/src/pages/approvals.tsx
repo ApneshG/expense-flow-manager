@@ -518,14 +518,13 @@ export default function ApprovalsPage() {
                             <TableHead>Date</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead className="text-center">Docs</TableHead>
-                            <TableHead>Budget Impact</TableHead>
                             <TableHead className="text-right pr-6">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredAndSortedPending.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="text-center py-16">
+                                <TableCell colSpan={7} className="text-center py-16">
                                     <Check className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                                     <p className="font-medium text-muted-foreground">All caught up!</p>
                                     <p className="text-sm text-muted-foreground/80">No pending expense requests match your criteria.</p>
@@ -585,20 +584,6 @@ export default function ApprovalsPage() {
                                             ) : (
                                                 <span className="text-muted-foreground text-xs">-</span>
                                             )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {(() => {
-                                                const deptBudget = getDepartmentBudget(expense.departmentId);
-                                                const balanceAfter = deptBudget.remaining - expense.amount;
-                                                return (
-                                                    <div className="text-xs space-y-1">
-                                                        <div>Avail: <span className="font-semibold">${deptBudget.remaining.toFixed(2)}</span></div>
-                                                        <div className={balanceAfter >= 0 ? "text-green-600" : "text-red-600"}>
-                                                            After: <span className="font-semibold">${balanceAfter.toFixed(2)}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
                                         </TableCell>
                                         <TableCell className="text-right pr-4" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex justify-end gap-1">
@@ -760,14 +745,13 @@ export default function ApprovalsPage() {
                             <TableHead>Date</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead className="text-center">Docs</TableHead>
-                            <TableHead>Budget Impact</TableHead>
                             <TableHead className="text-right pr-6">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredAndSortedOnHold.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                                     No requests on hold.
                                 </TableCell>
                             </TableRow>
@@ -793,20 +777,6 @@ export default function ApprovalsPage() {
                                             ) : (
                                                 <span className="text-muted-foreground text-xs">-</span>
                                             )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {(() => {
-                                                const deptBudget = getDepartmentBudget(expense.departmentId);
-                                                const balanceAfter = deptBudget.remaining - expense.amount;
-                                                return (
-                                                    <div className="text-xs space-y-1">
-                                                        <div>Avail: <span className="font-semibold">${deptBudget.remaining.toFixed(2)}</span></div>
-                                                        <div className={balanceAfter >= 0 ? "text-green-600" : "text-red-600"}>
-                                                            After: <span className="font-semibold">${balanceAfter.toFixed(2)}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
                                         </TableCell>
                                         <TableCell className="text-right pr-4" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex justify-end gap-1">

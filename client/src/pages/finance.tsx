@@ -386,18 +386,6 @@ export default function FinancePage() {
                                   <div className="text-right">
                                       <div className="text-xl font-bold">${expense.amount.toFixed(2)}</div>
                                       <span className="text-xs text-muted-foreground">Approved by HoD on {expense.hodActionDate ? format(new Date(expense.hodActionDate), "MMM d") : 'N/A'}</span>
-                                      {(() => {
-                                          const deptBudget = getDepartmentBudget(expense.departmentId);
-                                          const balanceAfter = deptBudget.remaining - expense.amount;
-                                          return (
-                                              <div className="text-xs mt-2 space-y-0.5">
-                                                  <div>Avail: <span className="font-semibold">${deptBudget.remaining.toFixed(2)}</span></div>
-                                                  <div className={balanceAfter >= 0 ? "text-green-600" : "text-red-600"}>
-                                                      After: <span className="font-semibold">${balanceAfter.toFixed(2)}</span>
-                                                  </div>
-                                              </div>
-                                          );
-                                      })()}
                                   </div>
                               </div>
                               
