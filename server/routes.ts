@@ -525,7 +525,10 @@ export async function registerRoutes(
           .where(eq(departments.id, userToUpdate.departmentId));
       }
 
+      const oldRole = userToUpdate.role;
       const updated = await storage.updateUser(req.params.id, { role });
+      // Sync employees membership and reassign in-flight HoD approvals.
+      await storage.handleRoleSideEffects(req.params.id, oldRole, role);
       const { password, resetToken, resetTokenExpiry, ...rest } = updated!;
       res.json(rest);
     } catch (error: any) {
@@ -584,8 +587,14 @@ export async function registerRoutes(
         }
         updates.status = status;
       }
+      // Capture old role before update so we can sync side effects after.
+      const existing = role ? await storage.getUser(req.params.id) : null;
+      const oldRole = existing?.role;
       const updated = await storage.updateUser(req.params.id, updates);
       if (!updated) return res.status(404).json({ message: "User not found" });
+      if (role && oldRole) {
+        await storage.handleRoleSideEffects(req.params.id, oldRole, role);
+      }
       const { password, resetToken, resetTokenExpiry, ...rest } = updated;
       res.json(rest);
     } catch (error: any) {

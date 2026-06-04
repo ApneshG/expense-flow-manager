@@ -62,6 +62,8 @@ function EmployeesManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/departments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
       setIsModalOpen(false);
       setEditingItem(null);
       toast({ title: `Employee ${editingItem ? "updated" : "added"} successfully` });

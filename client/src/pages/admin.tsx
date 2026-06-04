@@ -262,6 +262,10 @@ function UsersTable({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      // Role change can affect derived views (employees, departments, expenses)
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/departments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
       setEditingUser(null);
       toast({ title: "User updated successfully" });
     },

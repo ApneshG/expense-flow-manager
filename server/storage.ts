@@ -64,6 +64,7 @@ export interface IStorage {
   deleteEmployee(id: string): Promise<void>;
   getSetting(key: string): Promise<string | undefined>;
   setSetting(key: string, value: string): Promise<void>;
+  handleRoleSideEffects(userId: string, oldRole: string, newRole: string): Promise<void>;
   seedData(): Promise<void>;
 }
 
@@ -163,6 +164,68 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDepartment(id: string): Promise<void> {
     await db.delete(departments).where(eq(departments.id, id));
+  }
+
+  // Propagate side effects of a role change so derived tables and in-flight
+  // expense approvals stay consistent. Call AFTER users.role has been updated.
+  async handleRoleSideEffects(userId: string, oldRole: string, newRole: string): Promise<void> {
+    if (oldRole === newRole) return;
+
+    const user = await this.getUser(userId);
+    if (!user) return;
+
+    // 1) Sync employees-table membership.
+    //    Admin is a system role, so admins should NOT appear in the employees table.
+    const becameAdmin = newRole === "admin" && oldRole !== "admin";
+    const leftAdmin = oldRole === "admin" && newRole !== "admin";
+
+    if (becameAdmin) {
+      await db.delete(employees).where(eq(employees.userId, userId));
+    } else if (leftAdmin) {
+      await db
+        .insert(employees)
+        .values({
+          id: `emp-${user.id}`,
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          departmentId: user.departmentId,
+          status: user.status,
+        })
+        .onConflictDoNothing();
+    }
+
+    // 2) If an HoD changed role (demoted, promoted to finance/admin, etc.),
+    //    reassign their in-flight HoD approvals to the department's current HoD.
+    //    "In-flight" = expenses still waiting on HoD action.
+    if (oldRole === "hod" && newRole !== "hod") {
+      const [dept] = await db.select().from(departments).where(eq(departments.id, user.departmentId));
+      if (dept && dept.hodId && dept.hodId !== userId) {
+        await db
+          .update(expenses)
+          .set({ hodId: dept.hodId })
+          .where(
+            and(
+              eq(expenses.hodId, userId),
+              sql`status IN ('pending_hod', 'needs_revision', 'draft')`,
+            ),
+          );
+      }
+    }
+
+    // 3) If a brand new HoD was promoted, route any in-flight approvals in
+    //    their department (that were pointing at someone else) to them.
+    if (newRole === "hod" && oldRole !== "hod") {
+      await db
+        .update(expenses)
+        .set({ hodId: userId })
+        .where(
+          and(
+            eq(expenses.departmentId, user.departmentId),
+            sql`status IN ('pending_hod', 'needs_revision')`,
+          ),
+        );
+    }
   }
 
   async getSetting(key: string): Promise<string | undefined> {
