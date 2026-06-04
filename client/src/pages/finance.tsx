@@ -35,10 +35,15 @@ export default function FinancePage() {
   const [isItemActionDialogOpen, setIsItemActionDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<"paid" | "on_hold" | "needs_revision" | null>(null);
 
-  // Bulk actions state
+  // Bulk actions state (Payment Queue)
   const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<"paid" | "on_hold" | "needs_revision" | null>(null);
+
+  // Bulk actions state (On Hold Requests — separate so queues don't mix)
+  const [selectedOnHoldFinance, setSelectedOnHoldFinance] = useState<string[]>([]);
+  const [isOnHoldBulkDialogOpen, setIsOnHoldBulkDialogOpen] = useState(false);
+  const [onHoldBulkActionType, setOnHoldBulkActionType] = useState<"paid" | "needs_revision" | null>(null);
 
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRequest | null>(null);
 
@@ -172,6 +177,49 @@ export default function FinancePage() {
     setSelectedExpenses([]);
     setIsBulkActionDialogOpen(false);
     setBulkActionType(null);
+  };
+
+  // ---- On Hold Requests bulk handlers ----
+  const toggleSelectOnHoldFinance = (id: string) => {
+    setSelectedOnHoldFinance(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllOnHoldFinance = () => {
+    if (selectedOnHoldFinance.length === onHoldFinance.length && onHoldFinance.length > 0) {
+      setSelectedOnHoldFinance([]);
+    } else {
+      setSelectedOnHoldFinance(onHoldFinance.map(e => e.id));
+    }
+  };
+
+  const handleBulkOnHoldFinanceAction = () => {
+    if (!onHoldBulkActionType) return;
+    selectedOnHoldFinance.forEach(id => {
+      const updates: any = {
+        status: onHoldBulkActionType,
+        financeComment: comment || (onHoldBulkActionType === "paid" ? "Bulk Paid (from On Hold)" : "Bulk Send Back (from On Hold)"),
+        financeActionDate: new Date().toISOString(),
+      };
+      if (onHoldBulkActionType === "paid") {
+        updates.paymentMode = paymentMode || "Bulk Transfer";
+        updates.paymentDate = new Date(paymentDateInput).toISOString();
+        updates.paymentRef = paymentRef;
+      }
+      updateExpenseStatus(id, updates);
+    });
+    toast({
+      title: "Bulk Action Complete",
+      description: `${selectedOnHoldFinance.length} on-hold requests have been processed.`,
+    });
+    setComment("");
+    setPaymentMode("");
+    setPaymentDateInput(format(new Date(), "yyyy-MM-dd"));
+    setPaymentRef("");
+    setSelectedOnHoldFinance([]);
+    setIsOnHoldBulkDialogOpen(false);
+    setOnHoldBulkActionType(null);
   };
 
   return (
@@ -428,10 +476,42 @@ export default function FinancePage() {
 
           {/* On Hold Section */}
           <div className="mt-12 space-y-4">
-              <h2 className="text-xl font-semibold text-amber-700 flex items-center gap-2">
-                  <AlertOctagon className="w-5 h-5" /> On Hold Requests
-                  <Badge variant="secondary" className="rounded-full bg-amber-100 text-amber-700 ml-2">{onHoldFinance.length}</Badge>
-              </h2>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <h2 className="text-xl font-semibold text-amber-700 flex items-center gap-2">
+                      <AlertOctagon className="w-5 h-5" /> On Hold Requests
+                      <Badge variant="secondary" className="rounded-full bg-amber-100 text-amber-700 ml-2">{onHoldFinance.length}</Badge>
+                  </h2>
+
+                  {selectedOnHoldFinance.length > 0 && (
+                      <div className="flex gap-2">
+                          <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 h-8"
+                              onClick={() => { setOnHoldBulkActionType("paid"); setIsOnHoldBulkDialogOpen(true); }}
+                          >
+                              <Check className="w-4 h-4 mr-1" /> Paid ({selectedOnHoldFinance.length})
+                          </Button>
+                          <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-blue-200 text-blue-600 hover:bg-blue-50"
+                              onClick={() => { setOnHoldBulkActionType("needs_revision"); setIsOnHoldBulkDialogOpen(true); }}
+                          >
+                              <Send className="w-4 h-4 mr-1" /> Send Back ({selectedOnHoldFinance.length})
+                          </Button>
+                      </div>
+                  )}
+              </div>
+
+              {onHoldFinance.length > 0 && (
+                  <div className="flex items-center gap-2 px-2 py-2 bg-amber-50/40 rounded-md">
+                      <Checkbox
+                          checked={selectedOnHoldFinance.length === onHoldFinance.length && onHoldFinance.length > 0}
+                          onCheckedChange={toggleSelectAllOnHoldFinance}
+                      />
+                      <span className="text-sm font-medium text-amber-800">Select All On-Hold Requests</span>
+                  </div>
+              )}
               
               {onHoldFinance.length === 0 ? (
                   <Card className="bg-muted/10 border-dashed">
@@ -446,7 +526,13 @@ export default function FinancePage() {
                       const departmentHoD = department ? users.find(u => u.id === department.hodId) : undefined;
 
                       return (
-                          <Card key={expense.id} className="flex flex-col md:flex-row overflow-hidden transition-all mb-4 border-amber-200">
+                          <Card key={expense.id} className={`flex flex-col md:flex-row overflow-hidden transition-all mb-4 ${selectedOnHoldFinance.includes(expense.id) ? "ring-2 ring-amber-400 border-amber-400" : "border-amber-200"}`}>
+                              <div className="p-4 flex items-center justify-center border-r bg-muted/10">
+                                  <Checkbox
+                                      checked={selectedOnHoldFinance.includes(expense.id)}
+                                      onCheckedChange={() => toggleSelectOnHoldFinance(expense.id)}
+                                  />
+                              </div>
                               <div className="p-6 flex-1 space-y-3 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setSelectedExpense(expense)}>
                                   <div className="flex justify-between">
                                       <div>
@@ -490,9 +576,66 @@ export default function FinancePage() {
                       );
                   })
               )}
+
+              {/* Bulk action dialog for On Hold Requests */}
+              <Dialog open={isOnHoldBulkDialogOpen} onOpenChange={setIsOnHoldBulkDialogOpen}>
+                  <DialogContent>
+                      <DialogHeader>
+                          <DialogTitle>
+                              {onHoldBulkActionType === "paid" ? "Bulk Mark as Paid" : "Bulk Send Back"}
+                          </DialogTitle>
+                          <DialogDescription>
+                              Process {selectedOnHoldFinance.length} selected on-hold requests at once.
+                          </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                          {onHoldBulkActionType === "paid" && (
+                              <>
+                                  <div className="space-y-2">
+                                      <label className="text-sm font-medium">Payment Mode</label>
+                                      <Select onValueChange={setPaymentMode}>
+                                          <SelectTrigger>
+                                              <SelectValue placeholder="Select Method" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                              <SelectItem value="Wire Transfer">Wire Transfer</SelectItem>
+                                              <SelectItem value="Cheque">Cheque</SelectItem>
+                                              <SelectItem value="Payroll Reimbursement">Payroll Reimbursement</SelectItem>
+                                              <SelectItem value="Credit Card">Credit Card</SelectItem>
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+                                  <div className="space-y-2">
+                                      <label className="text-sm font-medium">Payment Date</label>
+                                      <Input type="date" value={paymentDateInput} onChange={(e) => setPaymentDateInput(e.target.value)} />
+                                  </div>
+                                  <div className="space-y-2">
+                                      <label className="text-sm font-medium">Payment Reference (optional)</label>
+                                      <Input value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="e.g. TXN-12345" />
+                                  </div>
+                              </>
+                          )}
+                          <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                  {onHoldBulkActionType === "paid" ? "Remark (optional)" : "Reason for Send Back"}
+                              </label>
+                              <Textarea
+                                  placeholder={onHoldBulkActionType === "paid" ? "Optional payment note..." : "Tell HoD/employee what needs to change..."}
+                                  value={comment}
+                                  onChange={(e) => setComment(e.target.value)}
+                              />
+                          </div>
+                      </div>
+                      <DialogFooter>
+                          <Button onClick={handleBulkOnHoldFinanceAction}>
+                              {onHoldBulkActionType === "paid" ? "Confirm Payment" : "Confirm Send Back"}
+                          </Button>
+                      </DialogFooter>
+                  </DialogContent>
+              </Dialog>
           </div>
       </div>
-      
+
       <Dialog open={isItemActionDialogOpen} onOpenChange={setIsItemActionDialogOpen}>
         <DialogContent>
             <DialogHeader>
