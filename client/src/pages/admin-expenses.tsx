@@ -133,7 +133,7 @@ export default function AdminExpensesPage() {
         <StatCard title="Total Pending" value={stats.pending} icon={<Clock className="w-4 h-4 text-amber-600" />} color="bg-amber-50" />
         <StatCard title="Total Approved" value={stats.approved} icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} color="bg-emerald-50" />
         <StatCard title="Total Rejected" value={stats.rejected} icon={<XCircle className="w-4 h-4 text-red-600" />} color="bg-red-50" />
-        <StatCard title="Approved Amount" value={`$${stats.totalAmount.toLocaleString()}`} icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} color="bg-emerald-50" />
+        <StatCard title="Paid Amount" value={`$${stats.totalAmount.toLocaleString()}`} icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} color="bg-emerald-50" />
       </div>
 
       <Card>
