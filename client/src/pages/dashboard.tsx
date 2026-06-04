@@ -576,42 +576,6 @@ export default function Dashboard() {
             </Card>
         </div>
 
-        {/* Row 2: Budget summary cards (moved from Pending Approvals page) */}
-        <div className="grid gap-6 md:grid-cols-3">
-            <Card className="border-l-4 border-l-primary">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Annual Budget</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">${budget.allocated.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground mt-1">Fiscal allocation</p>
-                </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-emerald-500">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Available Budget</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold text-emerald-600">${budget.remaining.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground mt-1">Ready for allocation</p>
-                </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-orange-400">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Budget Utilized</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{budget.allocated > 0 ? ((budget.spent / budget.allocated) * 100).toFixed(1) : "0"}%</div>
-                    <div className="w-full bg-muted rounded-full h-2 mt-3">
-                        <div className={cn(
-                            "h-2 rounded-full",
-                            budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "bg-destructive" :
-                            budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "bg-amber-500" : "bg-primary"
-                        )} style={{ width: `${budget.allocated > 0 ? Math.min((budget.spent / budget.allocated) * 100, 100) : 0}%` }}></div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
 
         {/* Row 3: Top Spenders + Category Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
