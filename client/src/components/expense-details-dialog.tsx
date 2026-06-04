@@ -24,6 +24,8 @@ export function ExpenseDetailsDialog({
     const employee = users.find(u => u.id === expense.employeeId);
     const department = departments.find(d => d.id === expense.departmentId);
     const hod = users.find(u => u.id === expense.hodId);
+    // Current HoD of the department (may differ from the expense's hodId if reassigned)
+    const departmentHoD = department ? users.find(u => u.id === department.hodId) : undefined;
 
     const isPendingHoD = expense.status === 'pending_hod';
     const canWithdraw = currentUser?.id === expense.employeeId && isPendingHoD;
@@ -55,7 +57,7 @@ export function ExpenseDetailsDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="flex-1 px-6 py-4">
+                <div className="flex-1 overflow-y-auto px-6 py-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* Left Column: Basic Info */}
                         <div className="space-y-6">
@@ -118,6 +120,13 @@ export function ExpenseDetailsDialog({
                                         <p className="font-medium flex items-center gap-1">
                                             <Building className="w-3 h-3" />
                                             {department?.name || 'Unknown'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">HoD</p>
+                                        <p className="font-medium flex items-center gap-1">
+                                            <User className="w-3 h-3" />
+                                            {departmentHoD?.name || 'Not assigned'}
                                         </p>
                                     </div>
                                 </div>
@@ -183,7 +192,7 @@ export function ExpenseDetailsDialog({
                             </div>
                         </div>
                     </div>
-                </ScrollArea>
+                </div>
                 {canWithdraw && (
                     <DialogFooter className="px-6 py-4 border-t bg-muted/20">
                         <Button variant="outline" onClick={handleWithdraw} className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive">

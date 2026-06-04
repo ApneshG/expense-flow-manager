@@ -366,11 +366,12 @@ export default function FinancePage() {
               financeQueue.map(expense => {
                   const employee = users.find(u => u.id === expense.employeeId);
                   const department = departments.find(d => d.id === expense.departmentId);
+                  const departmentHoD = department ? users.find(u => u.id === department.hodId) : undefined;
 
                   return (
                       <Card key={expense.id} className={`flex flex-col md:flex-row overflow-hidden transition-all mb-4 ${selectedExpenses.includes(expense.id) ? 'ring-2 ring-primary border-primary' : ''}`}>
                            <div className="p-4 flex items-center justify-center border-r bg-muted/10">
-                              <Checkbox 
+                              <Checkbox
                                   checked={selectedExpenses.includes(expense.id)}
                                   onCheckedChange={() => toggleSelectExpense(expense.id)}
                               />
@@ -381,6 +382,9 @@ export default function FinancePage() {
                                       <h3 className="font-semibold">{expense.description}</h3>
                                       <p className="text-sm text-muted-foreground">
                                           {employee?.name} • {department?.name} Department
+                                      </p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                          HoD: {departmentHoD?.name || 'Not assigned'}
                                       </p>
                                   </div>
                                   <div className="text-right">
@@ -439,6 +443,7 @@ export default function FinancePage() {
                   onHoldFinance.map(expense => {
                       const employee = users.find(u => u.id === expense.employeeId);
                       const department = departments.find(d => d.id === expense.departmentId);
+                      const departmentHoD = department ? users.find(u => u.id === department.hodId) : undefined;
 
                       return (
                           <Card key={expense.id} className="flex flex-col md:flex-row overflow-hidden transition-all mb-4 border-amber-200">
@@ -448,6 +453,9 @@ export default function FinancePage() {
                                           <h3 className="font-semibold">{expense.description}</h3>
                                           <p className="text-sm text-muted-foreground">
                                               {employee?.name} • {department?.name} Department
+                                          </p>
+                                          <p className="text-xs text-muted-foreground mt-0.5">
+                                              HoD: {departmentHoD?.name || 'Not assigned'}
                                           </p>
                                       </div>
                                       <div className="text-right">
