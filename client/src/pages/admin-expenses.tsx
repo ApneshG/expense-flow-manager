@@ -70,7 +70,9 @@ export default function AdminExpensesPage() {
       }
 
       return matchesSearch && matchesStatus && matchesDept && matchesCat && matchesDate;
-    });
+    })
+    // Sort by Bill Date, most recent first
+    .sort((a, b) => new Date(b.billDate).getTime() - new Date(a.billDate).getTime());
   }, [expenses, searchTerm, statusFilter, deptFilter, catFilter, dateRange, users, departments]);
 
   const paginatedExpenses = filteredExpenses.slice((currentPage - 1) * pageSize, currentPage * pageSize);

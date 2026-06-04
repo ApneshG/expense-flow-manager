@@ -53,7 +53,9 @@ export default function AllExpensesPage() {
     const matchesDept = deptFilter === "all" || e.departmentId === deptFilter;
 
     return matchesSearch && matchesStatus && matchesDept;
-  });
+  })
+  // Sort by Bill Date, most recent first
+  .sort((a, b) => new Date(b.billDate).getTime() - new Date(a.billDate).getTime());
 
   const exportToCSV = () => {
     // Basic CSV export logic
