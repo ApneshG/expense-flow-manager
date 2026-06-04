@@ -466,6 +466,57 @@ export default function Dashboard() {
         }, [] as { name: string; value: number }[])
         .sort((a, b) => b.value - a.value);
 
+    // ---- Row 3 data ----
+    // (1) Monthly Spending Trend — last 6 months, Paid vs Committed Unpaid stacked.
+    const months6 = eachMonthOfInterval({ start: subMonths(new Date(), 5), end: new Date() });
+    const monthlyTrendData = months6.map(m => {
+        const mStart = startOfMonth(m), mEnd = endOfMonth(m);
+        const inMonth = (e: typeof expenses[number]) => {
+            if (!e.billDate) return false;
+            const d = parseISO(e.billDate);
+            return isWithinInterval(d, { start: mStart, end: mEnd });
+        };
+        const paid = deptAllExpenses
+            .filter(e => PAID_STATUSES.includes(e.status) && inMonth(e))
+            .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        const committed = deptAllExpenses
+            .filter(e => COMMITTED_UNPAID_STATUSES.includes(e.status) && inMonth(e))
+            .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        return { name: format(m, "MMM"), paid, committed };
+    });
+
+    // (2) Pending Approval Aging — bucket pending_hod requests by days since createdAt.
+    const myPending = expenses.filter(e => e.hodId === currentUser.id && e.status === "pending_hod");
+    const ageBuckets = [
+        { name: "0–2 days", count: 0, amount: 0, fill: "#10b981" },   // fresh
+        { name: "3–5 days", count: 0, amount: 0, fill: "#f59e0b" },   // amber
+        { name: "6+ days",  count: 0, amount: 0, fill: "#ef4444" },   // stale
+    ];
+    myPending.forEach(e => {
+        const created = e.createdAt ? parseISO(e.createdAt) : null;
+        if (!created) return;
+        const days = differenceInDays(new Date(), created);
+        const idx = days <= 2 ? 0 : days <= 5 ? 1 : 2;
+        ageBuckets[idx].count += 1;
+        ageBuckets[idx].amount += Number(e.amount) || 0;
+    });
+
+    // (3) Status Distribution donut — only live statuses, sum amounts.
+    const statusLabels: Record<string, { label: string; fill: string }> = {
+        paid:            { label: "Paid",          fill: "#10b981" },
+        pending_hod:     { label: "Pending HoD",   fill: "#f59e0b" },
+        pending_finance: { label: "Pending Finance", fill: "#3b82f6" },
+        on_hold:         { label: "On Hold",       fill: "#f97316" },
+        needs_revision:  { label: "Needs Revision", fill: "#e11d48" },
+    };
+    const statusAgg: Record<string, number> = {};
+    deptAllExpenses
+        .filter(e => statusLabels[e.status])
+        .forEach(e => { statusAgg[e.status] = (statusAgg[e.status] || 0) + (Number(e.amount) || 0); });
+    const statusDonutData = Object.entries(statusAgg)
+        .map(([key, value]) => ({ name: statusLabels[key].label, value, fill: statusLabels[key].fill }))
+        .filter(d => d.value > 0);
+
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
@@ -638,6 +689,121 @@ export default function Dashboard() {
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+
+        {/* Row 3: Monthly Trend + Pending Aging + Status Distribution */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Monthly Spending Trend</CardTitle>
+                    <CardDescription>Last 6 months · Paid vs Committed Unpaid</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={monthlyTrendData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `$${v}`} />
+                            <Tooltip
+                                cursor={{ fill: "rgba(241,245,249,0.5)" }}
+                                contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                                formatter={(value: number, name: string) => [
+                                    `$${Number(value).toLocaleString()}`,
+                                    name === "paid" ? "Paid" : "Committed Unpaid",
+                                ]}
+                            />
+                            <Bar dataKey="paid" stackId="m" fill="#10b981" barSize={28} radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="committed" stackId="m" fill="#f59e0b" barSize={28} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Paid</span>
+                        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /> Committed Unpaid</span>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Approval Aging</CardTitle>
+                    <CardDescription>How long pending requests have been waiting</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {myPending.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-12 text-center">Nothing pending right now ✓</div>
+                    ) : (
+                        <>
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={ageBuckets} margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                                    <Tooltip
+                                        cursor={{ fill: "rgba(241,245,249,0.5)" }}
+                                        contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                                        formatter={(_v: number, _k: string, p: any) => [
+                                            `${p.payload.count} req · $${Number(p.payload.amount).toLocaleString()}`,
+                                            "In this bucket",
+                                        ]}
+                                    />
+                                    <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={48}>
+                                        {ageBuckets.map((b, i) => <Cell key={i} fill={b.fill} />)}
+                                        <LabelList dataKey="count" position="top" className="text-xs fill-slate-700" />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                            <p className="text-xs text-muted-foreground mt-2">
+                                Total queue: {myPending.length} req · $
+                                {ageBuckets.reduce((s, b) => s + b.amount, 0).toLocaleString()}
+                            </p>
+                        </>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Status Distribution</CardTitle>
+                    <CardDescription>Where dept expenses currently sit</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {statusDonutData.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-12 text-center">No live expenses to display.</div>
+                    ) : (
+                        <>
+                            <ResponsiveContainer width="100%" height={220}>
+                                <PieChart>
+                                    <Pie
+                                        data={statusDonutData}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={50}
+                                        outerRadius={80}
+                                        paddingAngle={3}
+                                    >
+                                        {statusDonutData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                                    </Pie>
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                                        formatter={(value: number) => [`$${Number(value).toLocaleString()}`, "Amount"]}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2 text-xs">
+                                {statusDonutData.map((d) => (
+                                    <div key={d.name} className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: d.fill }} />
+                                        <span className="text-slate-600 truncate">{d.name}</span>
+                                        <span className="text-slate-400 ml-auto">${d.value.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </CardContent>
             </Card>
