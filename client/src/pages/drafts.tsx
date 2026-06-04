@@ -61,7 +61,10 @@ export default function DraftsPage() {
 
   if (!currentUser) return null;
 
-  const drafts = expenses.filter(e => e.employeeId === currentUser.id && e.status === "draft");
+  const drafts = expenses
+    .filter(e => e.employeeId === currentUser.id && e.status === "draft")
+    // Sort by Bill Date, most recent first
+    .sort((a, b) => new Date(b.billDate).getTime() - new Date(a.billDate).getTime());
 
   const handleSubmitDraft = (draft: any) => {
     updateExpenseStatus(draft.id, {

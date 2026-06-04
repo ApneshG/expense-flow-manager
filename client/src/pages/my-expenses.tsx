@@ -34,10 +34,12 @@ export default function MyExpensesPage() {
     .filter(e => e.employeeId === currentUser.id)
     .filter(e => !["draft", "withdrawn"].includes(e.status))
     .filter(e => filter === "all" || e.status === filter)
-    .filter(e => 
+    .filter(e =>
       e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    )
+    // Sort by Bill Date, most recent first
+    .sort((a, b) => new Date(b.billDate).getTime() - new Date(a.billDate).getTime());
 
   const totalPages = Math.ceil(myExpenses.length / itemsPerPage);
   const paginatedExpenses = myExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);

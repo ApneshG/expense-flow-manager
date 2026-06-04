@@ -127,7 +127,9 @@ export default function Dashboard() {
         }
 
         return matchesDate && matchesStatus && matchesSearch;
-      });
+      })
+      // Sort by Bill Date, most recent first
+      .sort((a, b) => new Date(b.billDate).getTime() - new Date(a.billDate).getTime());
 
     const exportToCSV = () => {
       const headers = ["Category", "Description", "Date", "Amount", "Status"];
