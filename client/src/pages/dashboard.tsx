@@ -4,6 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format, isWithinInterval, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, differenceInDays } from "date-fns";
 import { CreditCard, CalendarIcon, Clock, Search, Download, Filter, Banknote, XCircle, CheckCircle2, Activity, Users, Wallet, AlertCircle, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { UserPlus, Building2, Inbox } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
@@ -28,6 +30,12 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRequest | null>(null);
   const [expenseToEdit, setExpenseToEdit] = useState<ExpenseRequest | null>(null);
+
+  // Pulled here (top-level hook) but only fetched for admins
+  const { data: inviteRequestsData = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/invite-requests"],
+    enabled: currentUser?.role === "admin",
+  });
 
   if (!currentUser) return null;
 
@@ -1132,6 +1140,180 @@ export default function Dashboard() {
                 </CardContent>
             </Card>
         </div>
+      </div>
+    );
+  }
+
+  if (currentUser.role === "admin") {
+    // --- Admin KPIs (company-wide) ---
+    const PAID = ["paid"];
+    const COMMITTED_UNPAID = ["pending_hod", "needs_revision", "pending_finance", "on_hold"];
+
+    const activeUsers = users.filter(u => u.status === "active" && u.role !== "admin");
+    const totalUsers = activeUsers.length;
+    const totalDepartments = departments.length;
+    const pendingAccessRequests = (inviteRequestsData || []).filter((r: any) => r.status === "pending").length;
+    const companyPaid = expenses.filter(e => PAID.includes(e.status)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const companyCommitted = expenses.filter(e => COMMITTED_UNPAID.includes(e.status)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+    // Stuck expenses: in-flight > 7 days based on createdAt
+    const stuckExpenses = expenses.filter(e => {
+      if (!COMMITTED_UNPAID.includes(e.status)) return false;
+      if (!e.createdAt) return false;
+      return differenceInDays(new Date(), parseISO(e.createdAt)) > 7;
+    });
+    const stuckCount = stuckExpenses.length;
+    const stuckTotal = stuckExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const actionTotal = pendingAccessRequests + stuckCount;
+
+    // Department Budget Health (use server-computed spent from getDepartmentBudget)
+    const deptHealth = departments
+      .map(d => {
+        const b = getDepartmentBudget(d.id);
+        const pct = b.allocated > 0 ? (b.spent / b.allocated) * 100 : 0;
+        return {
+          name: d.name,
+          pct: Number(pct.toFixed(1)),
+          spent: b.spent,
+          allocated: b.allocated,
+          remaining: b.remaining,
+          fill: pct >= 90 ? "#ef4444" : pct >= 80 ? "#f59e0b" : "#3b82f6",
+        };
+      })
+      .sort((a, b) => b.pct - a.pct);
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-display font-bold">Hello {currentUser.name.split(" ")[0]}</h1>
+          <p className="text-muted-foreground mt-1">Welcome to Expense Management App</p>
+        </div>
+
+        {/* Row 1: 5 KPI cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                <Users className="w-4 h-4" /> Total Users
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalUsers}</div>
+              <p className="text-xs text-muted-foreground mt-1">Active, excluding admins</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                <Building2 className="w-4 h-4" /> Departments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalDepartments}</div>
+              <p className="text-xs text-muted-foreground mt-1">Configured</p>
+            </CardContent>
+          </Card>
+          <Card className={pendingAccessRequests > 0 ? "border-amber-300 bg-amber-50/40" : ""}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                <Inbox className="w-4 h-4" /> Pending Access
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={cn("text-2xl font-bold", pendingAccessRequests > 0 ? "text-amber-700" : "")}>{pendingAccessRequests}</div>
+              <p className="text-xs text-muted-foreground mt-1">{pendingAccessRequests > 0 ? "Awaiting your review" : "All clear"}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Paid Expenses</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-emerald-600">${companyPaid.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground mt-1">Company-wide</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Committed Unpaid</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">${companyCommitted.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground mt-1">In approval queue</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 2: Action Required */}
+        <Card className="border-l-4 border-l-amber-400">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-500" /> Action Required
+            </CardTitle>
+            <CardDescription>What needs your attention right now</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {actionTotal === 0 ? (
+              <div className="flex items-center gap-2 text-emerald-700 text-sm py-2">
+                <CheckCircle2 className="w-5 h-5" /> All caught up — no admin tasks pending.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Link href="/admin">
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 hover:shadow-sm transition-all cursor-pointer">
+                    <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold uppercase tracking-wide">
+                      <UserPlus className="w-4 h-4" /> Access Requests Pending
+                    </div>
+                    <div className="text-3xl font-bold text-amber-900 mt-1">{pendingAccessRequests}</div>
+                    <p className="text-xs text-amber-700 mt-1">Review &amp; approve →</p>
+                  </div>
+                </Link>
+                <Link href="/admin/expenses">
+                  <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:shadow-sm transition-all cursor-pointer">
+                    <div className="flex items-center gap-2 text-rose-700 text-xs font-semibold uppercase tracking-wide">
+                      <Clock className="w-4 h-4" /> Stuck Expenses (&gt; 7 days)
+                    </div>
+                    <div className="text-3xl font-bold text-rose-900 mt-1">{stuckCount}</div>
+                    <p className="text-xs text-rose-700 mt-1">${stuckTotal.toLocaleString()} blocked · View all →</p>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Row 3: Department Budget Health */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Department Budget Health</CardTitle>
+            <CardDescription>Utilization (Paid + Committed Unpaid) vs annual budget · amber {'>'}80%, red {'>'}90%</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {deptHealth.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-8 text-center">No departments yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(180, deptHealth.length * 56)}>
+                <BarChart data={deptHealth} layout="vertical" margin={{ top: 8, right: 80, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" domain={[0, 100]} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#0f172a" }} />
+                  <Tooltip
+                    cursor={{ fill: "transparent" }}
+                    contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                    formatter={(_v: number, _k: string, p: any) => [
+                      `${p.payload.pct}% · $${Number(p.payload.spent).toLocaleString()} of $${Number(p.payload.allocated).toLocaleString()}`,
+                      "Utilization",
+                    ]}
+                  />
+                  <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={24}>
+                    {deptHealth.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                    <LabelList dataKey="pct" position="right" formatter={(v: number) => `${v}%`} className="text-xs fill-slate-700" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
