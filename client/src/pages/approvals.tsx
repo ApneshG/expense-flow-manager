@@ -31,6 +31,11 @@ export default function ApprovalsPage() {
   const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<"approve" | "reject" | "on_hold" | "send_back" | null>(null);
+
+  // On Hold bulk selection (separate from Pending so they can't mix)
+  const [selectedOnHoldExpenses, setSelectedOnHoldExpenses] = useState<string[]>([]);
+  const [isOnHoldBulkDialogOpen, setIsOnHoldBulkDialogOpen] = useState(false);
+  const [onHoldBulkActionType, setOnHoldBulkActionType] = useState<"approve" | "reject" | "send_back" | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRequest | null>(null);
 
   // New Filters & Sort
@@ -193,6 +198,45 @@ export default function ApprovalsPage() {
     } else {
       setSelectedExpenses(filteredAndSortedPending.map(e => e.id));
     }
+  };
+
+  const toggleSelectOnHold = (id: string) => {
+    setSelectedOnHoldExpenses(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllOnHold = () => {
+    if (selectedOnHoldExpenses.length === filteredAndSortedOnHold.length && filteredAndSortedOnHold.length > 0) {
+      setSelectedOnHoldExpenses([]);
+    } else {
+      setSelectedOnHoldExpenses(filteredAndSortedOnHold.map(e => e.id));
+    }
+  };
+
+  const handleBulkOnHoldAction = () => {
+    if (!onHoldBulkActionType) return;
+    selectedOnHoldExpenses.forEach(id => {
+      let targetStatus = "";
+      switch (onHoldBulkActionType) {
+        case "approve":  targetStatus = "pending_finance"; break;
+        case "reject":   targetStatus = "rejected_hod"; break;
+        case "send_back": targetStatus = "needs_revision"; break;
+      }
+      updateExpenseStatus(id, {
+        status: targetStatus as any,
+        hodComment: comment || `Bulk ${onHoldBulkActionType.replace("_", " ")} (from On Hold)`,
+        hodActionDate: new Date().toISOString(),
+      });
+    });
+    toast({
+      title: "Bulk Action Complete",
+      description: `${selectedOnHoldExpenses.length} on-hold requests have been processed.`,
+    });
+    setComment("");
+    setSelectedOnHoldExpenses([]);
+    setIsOnHoldBulkDialogOpen(false);
+    setOnHoldBulkActionType(null);
   };
 
   const handleBulkAction = () => {
@@ -754,16 +798,91 @@ export default function ApprovalsPage() {
           {/* On Hold Table */}
           <Card>
             <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl">On Hold Requests</CardTitle>
-                    <Badge variant="secondary" className="rounded-full bg-amber-100 text-amber-700">{filteredAndSortedOnHold.length}</Badge>
+                <div className="flex justify-between items-center flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                        <CardTitle className="text-xl">On Hold Requests</CardTitle>
+                        <Badge variant="secondary" className="rounded-full bg-amber-100 text-amber-700">{filteredAndSortedOnHold.length}</Badge>
+                    </div>
+
+                    {selectedOnHoldExpenses.length > 0 && (
+                        <div className="flex gap-2">
+                            <Dialog open={isOnHoldBulkDialogOpen && onHoldBulkActionType === "approve"} onOpenChange={(o) => { setIsOnHoldBulkDialogOpen(o); if (!o) setOnHoldBulkActionType(null); }}>
+                                <DialogTrigger asChild>
+                                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-8" onClick={() => { setOnHoldBulkActionType("approve"); setIsOnHoldBulkDialogOpen(true); }}>
+                                        <Check className="w-4 h-4 mr-1" /> Approve ({selectedOnHoldExpenses.length})
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Bulk Approve On-Hold Expenses</DialogTitle>
+                                        <DialogDescription>Approve {selectedOnHoldExpenses.length} selected on-hold requests at once.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-2 py-4">
+                                        <label className="text-sm font-medium">Remarks / Comments</label>
+                                        <Textarea placeholder="Optional comment for all..." value={comment} onChange={(e) => setComment(e.target.value)} />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button onClick={handleBulkOnHoldAction}>Confirm Approval</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog open={isOnHoldBulkDialogOpen && onHoldBulkActionType === "reject"} onOpenChange={(o) => { setIsOnHoldBulkDialogOpen(o); if (!o) setOnHoldBulkActionType(null); }}>
+                                <DialogTrigger asChild>
+                                    <Button size="sm" variant="destructive" className="h-8" onClick={() => { setOnHoldBulkActionType("reject"); setIsOnHoldBulkDialogOpen(true); }}>
+                                        <X className="w-4 h-4 mr-1" /> Reject ({selectedOnHoldExpenses.length})
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Bulk Reject On-Hold Expenses</DialogTitle>
+                                        <DialogDescription>Reject {selectedOnHoldExpenses.length} selected on-hold requests.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-2 py-4">
+                                        <label className="text-sm font-medium">Reason for Rejection</label>
+                                        <Textarea placeholder="Reason for rejection..." value={comment} onChange={(e) => setComment(e.target.value)} />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="destructive" onClick={handleBulkOnHoldAction}>Confirm Rejection</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog open={isOnHoldBulkDialogOpen && onHoldBulkActionType === "send_back"} onOpenChange={(o) => { setIsOnHoldBulkDialogOpen(o); if (!o) setOnHoldBulkActionType(null); }}>
+                                <DialogTrigger asChild>
+                                    <Button size="sm" variant="outline" className="h-8 border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => { setOnHoldBulkActionType("send_back"); setIsOnHoldBulkDialogOpen(true); }}>
+                                        Send Back ({selectedOnHoldExpenses.length})
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Bulk Send Back On-Hold Expenses</DialogTitle>
+                                        <DialogDescription>Send {selectedOnHoldExpenses.length} selected on-hold requests back for revision.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-2 py-4">
+                                        <label className="text-sm font-medium">Revision Instructions</label>
+                                        <Textarea placeholder="Tell the employee what needs to change..." value={comment} onChange={(e) => setComment(e.target.value)} />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50" onClick={handleBulkOnHoldAction}>Confirm Send Back</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                    )}
                 </div>
             </CardHeader>
             <CardContent className="p-0">
                 <Table>
                     <TableHeader className="bg-muted/40">
                         <TableRow>
-                            <TableHead className="pl-6">Employee</TableHead>
+                            <TableHead className="w-12 pl-6">
+                                <Checkbox
+                                    checked={selectedOnHoldExpenses.length === filteredAndSortedOnHold.length && filteredAndSortedOnHold.length > 0}
+                                    onCheckedChange={toggleSelectAllOnHold}
+                                />
+                            </TableHead>
+                            <TableHead>Employee</TableHead>
                             <TableHead>Category</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Amount</TableHead>
@@ -774,21 +893,27 @@ export default function ApprovalsPage() {
                     <TableBody>
                         {filteredAndSortedOnHold.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                                     No requests on hold.
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredAndSortedOnHold.map((expense) => {
                                 const employee = users.find(u => u.id === expense.employeeId);
-                                
+
                                 return (
-                                    <TableRow 
-                                        key={expense.id} 
-                                        className="cursor-pointer transition-colors hover:bg-muted/50"
+                                    <TableRow
+                                        key={expense.id}
+                                        className={`cursor-pointer transition-colors hover:bg-muted/50 ${selectedOnHoldExpenses.includes(expense.id) ? "bg-amber-50/40" : ""}`}
                                         onClick={() => setSelectedExpense(expense)}
                                     >
-                                        <TableCell className="font-medium pl-6">{employee?.name}</TableCell>
+                                        <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                                checked={selectedOnHoldExpenses.includes(expense.id)}
+                                                onCheckedChange={() => toggleSelectOnHold(expense.id)}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="font-medium">{employee?.name}</TableCell>
                                         <TableCell>
                                             <Badge variant="secondary" className="font-normal">{expense.category}</Badge>
                                         </TableCell>
