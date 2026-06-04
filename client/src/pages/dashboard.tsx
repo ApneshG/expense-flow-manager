@@ -576,52 +576,42 @@ export default function Dashboard() {
             </Card>
         </div>
 
-        {/* Row 2: Action Required */}
-        <Card className="border-l-4 border-l-amber-400">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-500" /> Action Required
-                </CardTitle>
-                <CardDescription>What needs your attention right now</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {actionTotal === 0 ? (
-                    <div className="flex items-center gap-2 text-emerald-700 text-sm py-2">
-                        <CheckCircle2 className="w-5 h-5" /> All caught up — nothing pending in your queue.
+        {/* Row 2: Budget summary cards (moved from Pending Approvals page) */}
+        <div className="grid gap-6 md:grid-cols-3">
+            <Card className="border-l-4 border-l-primary">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Annual Budget</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">${budget.allocated.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Fiscal allocation</p>
+                </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-emerald-500">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Available Budget</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold text-emerald-600">${budget.remaining.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Ready for allocation</p>
+                </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-orange-400">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Budget Utilized</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{budget.allocated > 0 ? ((budget.spent / budget.allocated) * 100).toFixed(1) : "0"}%</div>
+                    <div className="w-full bg-muted rounded-full h-2 mt-3">
+                        <div className={cn(
+                            "h-2 rounded-full",
+                            budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 90 ? "bg-destructive" :
+                            budget.allocated > 0 && (budget.spent / budget.allocated) * 100 >= 80 ? "bg-amber-500" : "bg-primary"
+                        )} style={{ width: `${budget.allocated > 0 ? Math.min((budget.spent / budget.allocated) * 100, 100) : 0}%` }}></div>
                     </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <Link href="/approvals">
-                            <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 hover:shadow-sm transition-all cursor-pointer">
-                                <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold uppercase tracking-wide">
-                                    <Clock className="w-4 h-4" /> Awaiting Your Approval
-                                </div>
-                                <div className="text-3xl font-bold text-amber-900 mt-1">{pendingApprovalCount}</div>
-                                <p className="text-xs text-amber-700 mt-1">Review queue →</p>
-                            </div>
-                        </Link>
-                        <Link href="/approvals">
-                            <div className="p-4 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 hover:shadow-sm transition-all cursor-pointer">
-                                <div className="flex items-center gap-2 text-orange-700 text-xs font-semibold uppercase tracking-wide">
-                                    <Activity className="w-4 h-4" /> On Hold
-                                </div>
-                                <div className="text-3xl font-bold text-orange-900 mt-1">{onHoldCount}</div>
-                                <p className="text-xs text-orange-700 mt-1">Needs follow-up →</p>
-                            </div>
-                        </Link>
-                        <Link href="/approvals">
-                            <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:shadow-sm transition-all cursor-pointer">
-                                <div className="flex items-center gap-2 text-rose-700 text-xs font-semibold uppercase tracking-wide">
-                                    <AlertCircle className="w-4 h-4" /> Needs Revision
-                                </div>
-                                <div className="text-3xl font-bold text-rose-900 mt-1">{needsRevisionCount}</div>
-                                <p className="text-xs text-rose-700 mt-1">Waiting on employee →</p>
-                            </div>
-                        </Link>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </div>
 
         {/* Row 3: Top Spenders + Category Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

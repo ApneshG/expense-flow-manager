@@ -7,7 +7,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { format, isWithinInterval, parseISO, differenceInDays } from "date-fns";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Search, CalendarIcon, Download, ArrowUpDown, Paperclip, AlertCircle, Zap } from "lucide-react";
+import { Check, X, Search, CalendarIcon, Download, ArrowUpDown, Paperclip, AlertCircle, Zap, Clock, Activity, CheckCircle2 } from "lucide-react";
+import { Link } from "wouter";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,11 +41,22 @@ export default function ApprovalsPage() {
   const pendingRequests = expenses.filter(
     (e) => e.hodId === currentUser?.id && e.status === "pending_hod"
   );
-  
+
   const onHoldRequests = expenses.filter(
     (e) => e.hodId === currentUser?.id && e.status === "on_hold"
   );
-  
+
+  const needsRevisionRequests = expenses.filter(
+    (e) => e.hodId === currentUser?.id && e.status === "needs_revision"
+  );
+
+  const sumAmount = (list: ExpenseRequest[]) =>
+    list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const awaitingTotalAmt = sumAmount(pendingRequests);
+  const onHoldTotalAmt = sumAmount(onHoldRequests);
+  const needsRevisionTotalAmt = sumAmount(needsRevisionRequests);
+  const actionTotal = pendingRequests.length + onHoldRequests.length + needsRevisionRequests.length;
+
   const budget = currentUser?.departmentId ? getDepartmentBudget(currentUser.departmentId) : { allocated: 0, spent: 0, remaining: 0 };
   const budgetPercent = budget.allocated > 0 ? (budget.spent / budget.allocated) * 100 : 0;
 
@@ -263,35 +275,46 @@ export default function ApprovalsPage() {
               <p className="text-muted-foreground mt-1">Review and manage expense requests from your department.</p>
             </div>
           </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card className="md:col-span-1 border-l-4 border-l-primary">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Annual Budget</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">${budget.allocated.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground mt-1">Fiscal Year 2024</p>
-                </CardContent>
-            </Card>
-            <Card className="md:col-span-1 border-l-4 border-l-success">
-                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Available Budget</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold text-success">${budget.remaining.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground mt-1">Ready for allocation</p>
-                </CardContent>
-            </Card>
-            <Card className="md:col-span-1 border-l-4 border-l-orange-400">
-                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Budget Utilized</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{budgetPercent.toFixed(1)}%</div>
-                    <Progress value={budgetPercent} className="h-2 mt-3" />
-                </CardContent>
-            </Card>
-          </div>
+          {/* Action Required — what's in this HoD's queue right now */}
+          <Card className="border-l-4 border-l-amber-400">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500" /> Action Required
+              </CardTitle>
+              <CardDescription>What needs your attention right now</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {actionTotal === 0 ? (
+                <div className="flex items-center gap-2 text-emerald-700 text-sm py-2">
+                  <CheckCircle2 className="w-5 h-5" /> All caught up — nothing pending in your queue.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                    <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold uppercase tracking-wide">
+                      <Clock className="w-4 h-4" /> Awaiting Your Approval
+                    </div>
+                    <div className="text-3xl font-bold text-amber-900 mt-1">{pendingRequests.length}</div>
+                    <p className="text-xs text-amber-700 mt-1">${awaitingTotalAmt.toLocaleString()} in this bucket</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
+                    <div className="flex items-center gap-2 text-orange-700 text-xs font-semibold uppercase tracking-wide">
+                      <Activity className="w-4 h-4" /> On Hold
+                    </div>
+                    <div className="text-3xl font-bold text-orange-900 mt-1">{onHoldRequests.length}</div>
+                    <p className="text-xs text-orange-700 mt-1">${onHoldTotalAmt.toLocaleString()} in this bucket</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-rose-50 border border-rose-200">
+                    <div className="flex items-center gap-2 text-rose-700 text-xs font-semibold uppercase tracking-wide">
+                      <AlertCircle className="w-4 h-4" /> Needs Revision
+                    </div>
+                    <div className="text-3xl font-bold text-rose-900 mt-1">{needsRevisionRequests.length}</div>
+                    <p className="text-xs text-rose-700 mt-1">${needsRevisionTotalAmt.toLocaleString()} in this bucket</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-4">
                 <div className="flex flex-col gap-4">
