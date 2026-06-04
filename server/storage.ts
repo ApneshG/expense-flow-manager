@@ -186,16 +186,18 @@ export class DatabaseStorage implements IStorage {
     await db.delete(departments).where(eq(departments.id, id));
   }
 
-  // Propagate side effects of a role change so derived tables and in-flight
-  // expense approvals stay consistent. Call AFTER users.role has been updated.
+  // Role changes are intentionally INDEPENDENT.
+  //   - Promoting a user to HoD does NOT auto-demote anyone else.
+  //   - Demoting an HoD does NOT auto-reroute their pending approvals.
+  //   - Department.hodId is managed manually by the admin in Data Mgmt.
+  // The only side effect we keep here is syncing the employees table, since
+  // admin is a system role and should never appear as a company employee.
   async handleRoleSideEffects(userId: string, oldRole: string, newRole: string): Promise<void> {
     if (oldRole === newRole) return;
 
     const user = await this.getUser(userId);
     if (!user) return;
 
-    // 1) Sync employees-table membership.
-    //    Admin is a system role, so admins should NOT appear in the employees table.
     const becameAdmin = newRole === "admin" && oldRole !== "admin";
     const leftAdmin = oldRole === "admin" && newRole !== "admin";
 
@@ -213,54 +215,6 @@ export class DatabaseStorage implements IStorage {
           status: user.status,
         })
         .onConflictDoNothing();
-    }
-
-    // 2) If an HoD changed role (demoted, promoted to finance/admin, etc.),
-    //    reassign their in-flight HoD approvals to the department's current HoD.
-    //    "In-flight" = expenses still waiting on HoD action.
-    if (oldRole === "hod" && newRole !== "hod") {
-      const [dept] = await db.select().from(departments).where(eq(departments.id, user.departmentId));
-      if (dept && dept.hodId && dept.hodId !== userId) {
-        await db
-          .update(expenses)
-          .set({ hodId: dept.hodId })
-          .where(
-            and(
-              eq(expenses.hodId, userId),
-              sql`status IN ('pending_hod', 'needs_revision', 'draft')`,
-            ),
-          );
-      }
-    }
-
-    // 3) If a brand new HoD was promoted:
-    //    a) Demote any other active HoD in the same department to "employee"
-    //    b) Update department.hodId to point at the new HoD
-    //    c) Re-route in-flight approvals to the new HoD
-    if (newRole === "hod" && oldRole !== "hod") {
-      const allUsers = await db.select().from(users);
-      const otherHods = allUsers.filter(u =>
-        u.departmentId === user.departmentId &&
-        u.role === "hod" &&
-        u.id !== userId &&
-        u.status === "active"
-      );
-      for (const hod of otherHods) {
-        await db.update(users).set({ role: "employee" }).where(eq(users.id, hod.id));
-      }
-      await db
-        .update(departments)
-        .set({ hodId: userId })
-        .where(eq(departments.id, user.departmentId));
-      await db
-        .update(expenses)
-        .set({ hodId: userId })
-        .where(
-          and(
-            eq(expenses.departmentId, user.departmentId),
-            sql`status IN ('pending_hod', 'needs_revision')`,
-          ),
-        );
     }
   }
 
