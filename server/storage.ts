@@ -233,9 +233,25 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // 3) If a brand new HoD was promoted, route any in-flight approvals in
-    //    their department (that were pointing at someone else) to them.
+    // 3) If a brand new HoD was promoted:
+    //    a) Demote any other active HoD in the same department to "employee"
+    //    b) Update department.hodId to point at the new HoD
+    //    c) Re-route in-flight approvals to the new HoD
     if (newRole === "hod" && oldRole !== "hod") {
+      const allUsers = await db.select().from(users);
+      const otherHods = allUsers.filter(u =>
+        u.departmentId === user.departmentId &&
+        u.role === "hod" &&
+        u.id !== userId &&
+        u.status === "active"
+      );
+      for (const hod of otherHods) {
+        await db.update(users).set({ role: "employee" }).where(eq(users.id, hod.id));
+      }
+      await db
+        .update(departments)
+        .set({ hodId: userId })
+        .where(eq(departments.id, user.departmentId));
       await db
         .update(expenses)
         .set({ hodId: userId })

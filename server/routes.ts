@@ -504,25 +504,8 @@ export async function registerRoutes(
       const userToUpdate = await storage.getUser(req.params.id);
       if (!userToUpdate) return res.status(404).json({ message: "User not found" });
 
-      // If making someone a HoD, ensure they are the ONLY active HoD for that department
-      if (role === "hod") {
-        const allUsers = await storage.getUsers();
-        const otherHods = allUsers.filter(u => 
-          u.departmentId === userToUpdate.departmentId && 
-          u.role === "hod" && 
-          u.id !== req.params.id &&
-          u.status === "active"
-        );
-        
-        for (const hod of otherHods) {
-          await storage.updateUser(hod.id, { role: "employee" });
-        }
-        
-        // Update department table to point to new HoD
-        await db.update(departments)
-          .set({ hodId: req.params.id })
-          .where(eq(departments.id, userToUpdate.departmentId));
-      }
+      // Note: HoD promotion (demote other HoDs, update dept.hodId, re-route
+      // pending approvals) is now centralized in storage.handleRoleSideEffects.
 
       const oldRole = userToUpdate.role;
       const updated = await storage.updateUser(req.params.id, { role });
@@ -563,22 +546,9 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Invalid role" });
         }
         updates.role = role;
-        const userToUpdate = await storage.getUser(req.params.id);
-        if (role === "hod" && userToUpdate) {
-          const allUsers = await storage.getUsers();
-          const otherHods = allUsers.filter(u => 
-            u.departmentId === userToUpdate.departmentId && 
-            u.role === "hod" && 
-            u.id !== req.params.id &&
-            u.status === "active"
-          );
-          for (const hod of otherHods) {
-            await storage.updateUser(hod.id, { role: "employee" });
-          }
-          await db.update(departments)
-            .set({ hodId: req.params.id })
-            .where(eq(departments.id, userToUpdate.departmentId));
-        }
+        // HoD-promotion side effects (demote other HoDs, update dept.hodId,
+        // re-route pending approvals) are handled in storage.handleRoleSideEffects
+        // below.
       }
       if (status) {
         if (!["active", "inactive"].includes(status)) {
