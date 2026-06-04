@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { format, isWithinInterval, parseISO } from "date-fns";
+import { format, isWithinInterval, parseISO, differenceInDays, startOfMonth, endOfMonth } from "date-fns";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign, Send, Archive, AlertOctagon, Filter, Check, X, CalendarIcon, Search } from "lucide-react";
@@ -100,6 +100,37 @@ export default function FinancePage() {
   // Enterprise stats
   const totalSpent = expenses.filter(e => e.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
   const pendingAmount = financeQueue.reduce((acc, curr) => acc + curr.amount, 0);
+
+  // ---- KPI strip data ----
+  // Pending Payouts: count + $ of pending_finance (= financeQueue)
+  const pendingPayoutsCount = financeQueue.length;
+  const pendingPayoutsTotal = pendingAmount;
+
+  // On Hold: count + $ of on_hold
+  const onHoldCount = onHoldFinance.length;
+  const onHoldTotal = onHoldFinance.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  // Stuck > 7 days: pending_finance items where HoD approved more than 7 days ago
+  const stuckExpenses = financeQueue.filter(e => {
+    const ref = e.hodActionDate || e.createdAt;
+    if (!ref) return false;
+    return differenceInDays(new Date(), parseISO(ref)) > 7;
+  });
+  const stuckCount = stuckExpenses.length;
+  const stuckTotal = stuckExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  // Paid This Month: items paid in current calendar month
+  const monthStart = startOfMonth(new Date());
+  const monthEnd = endOfMonth(new Date());
+  const paidThisMonth = expenses.filter(e => {
+    if (e.status !== "paid") return false;
+    const ref = e.paymentDate || e.financeActionDate;
+    if (!ref) return false;
+    const d = parseISO(ref);
+    return isWithinInterval(d, { start: monthStart, end: monthEnd });
+  });
+  const paidThisMonthCount = paidThisMonth.length;
+  const paidThisMonthTotal = paidThisMonth.reduce((s, e) => s + (Number(e.amount) || 0), 0);
 
   const handleProcess = () => {
     if (!selectedExpenseId || !actionType) return;
@@ -267,22 +298,42 @@ export default function FinancePage() {
         </Popover>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Disbursed</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">${totalSpent.toLocaleString()}</div></CardContent>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Pending Payouts</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold text-blue-600">${pendingPayoutsTotal.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1">{pendingPayoutsCount} {pendingPayoutsCount === 1 ? "request" : "requests"} awaiting payment</p>
+            </CardContent>
         </Card>
         <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Pending Payouts</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-blue-600">${pendingAmount.toLocaleString()}</div></CardContent>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">On Hold</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold text-amber-600">${onHoldTotal.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1">{onHoldCount} {onHoldCount === 1 ? "request" : "requests"} paused for review</p>
+            </CardContent>
+        </Card>
+        <Card className={stuckCount > 0 ? "border-destructive/40 bg-destructive/5" : ""}>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Stuck &gt; 7 days</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className={`text-2xl font-bold ${stuckCount > 0 ? "text-destructive" : ""}`}>${stuckTotal.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1">{stuckCount} {stuckCount === 1 ? "request" : "requests"} overdue · needs action</p>
+            </CardContent>
         </Card>
         <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Queue Length</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{financeQueue.length}</div></CardContent>
-        </Card>
-        <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Departments</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{departments.length}</div></CardContent>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Paid This Month</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold text-emerald-600">${paidThisMonthTotal.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1">{paidThisMonthCount} {paidThisMonthCount === 1 ? "request" : "requests"} disbursed in {format(new Date(), "MMM")}</p>
+            </CardContent>
         </Card>
       </div>
 
