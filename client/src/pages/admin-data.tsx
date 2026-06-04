@@ -56,7 +56,12 @@ function EmployeesManager() {
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
-      if (editingItem) return apiRequest("PATCH", `/api/admin/users/${editingItem.id}/role`, data);
+      if (editingItem) {
+        // Only Department is editable from the Edit Employee dialog now.
+        return apiRequest("PATCH", `/api/admin/users/${editingItem.id}/department`, {
+          departmentId: data.departmentId,
+        });
+      }
       return apiRequest("POST", "/api/admin/employees", data);
     },
     onSuccess: () => {
@@ -126,8 +131,11 @@ function EmployeesManager() {
 }
 
 function EmployeeForm({ departments, users, initialData, onSubmit, isPending }: any) {
-  const [formData, setFormData] = useState(initialData || { name: "", email: "", role: "employee", departmentId: "", status: "active" });
-  
+  const isEditing = !!initialData;
+  const [formData, setFormData] = useState(
+    initialData || { name: "", email: "", role: "employee", departmentId: "", status: "active" },
+  );
+
   const handleEmailChange = (selectedEmail: string) => {
     const selectedUser = users.find((u: any) => u.email === selectedEmail);
     if (selectedUser) {
@@ -141,32 +149,59 @@ function EmployeeForm({ departments, users, initialData, onSubmit, isPending }: 
     }
   };
 
+  const formatRole = (role: string) =>
+    role.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="space-y-4 pt-4">
       <div className="space-y-2">
-        <Label>Email (from Users) *</Label>
-        <Select value={formData.email} onValueChange={handleEmailChange}>
-          <SelectTrigger><SelectValue placeholder="Select Employee Email" /></SelectTrigger>
-          <SelectContent>
-            {users.map((u: any) => (
-              <SelectItem key={u.id} value={u.email}>{u.email} ({u.name})</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label>Email{isEditing ? "" : " (from Users) *"}</Label>
+        {isEditing ? (
+          <Input disabled value={formData.email} />
+        ) : (
+          <Select value={formData.email} onValueChange={handleEmailChange}>
+            <SelectTrigger><SelectValue placeholder="Select Employee Email" /></SelectTrigger>
+            <SelectContent>
+              {users.map((u: any) => (
+                <SelectItem key={u.id} value={u.email}>{u.email} ({u.name})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
       <div className="space-y-2">
         <Label>Name</Label>
         <Input disabled value={formData.name} />
       </div>
       <div className="space-y-2">
-        <Label>Department</Label>
-        <Input disabled value={departments.find((d: any) => d.id === formData.departmentId)?.name || "-"} />
+        <Label>Department{isEditing ? " *" : ""}</Label>
+        {isEditing ? (
+          <Select
+            value={formData.departmentId}
+            onValueChange={(v) => setFormData({ ...formData, departmentId: v })}
+          >
+            <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
+            <SelectContent>
+              {departments.map((d: any) => (
+                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input disabled value={departments.find((d: any) => d.id === formData.departmentId)?.name || "-"} />
+        )}
       </div>
       <div className="space-y-2">
         <Label>Role</Label>
-        <Input disabled value={formData.role.replace("_", " ").charAt(0).toUpperCase() + formData.role.replace("_", " ").slice(1)} />
+        <Input disabled value={formatRole(formData.role)} />
       </div>
-      <Button type="submit" className="w-full" disabled={isPending || !formData.email}>{isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Save Employee</Button>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={isPending || (isEditing ? !formData.departmentId : !formData.email)}
+      >
+        {isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Save Employee
+      </Button>
     </form>
   );
 }

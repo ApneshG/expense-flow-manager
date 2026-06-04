@@ -579,6 +579,13 @@ export async function registerRoutes(
       }
       const updated = await storage.updateUser(req.params.id, { departmentId });
       if (!updated) return res.status(404).json({ message: "User not found" });
+      // Keep the employees table row's department in sync so the Employees tab
+      // reflects the change immediately.
+      const allEmployees = await storage.getEmployees();
+      const empRow = allEmployees.find(e => e.userId === req.params.id);
+      if (empRow) {
+        await storage.updateEmployee(empRow.id, { departmentId });
+      }
       const { password, resetToken, resetTokenExpiry, ...rest } = updated;
       res.json(rest);
     } catch (error: any) {
