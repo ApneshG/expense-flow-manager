@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { startAgingScheduler } from "./aging";
 
 process.on("uncaughtException", (err) => {
   console.log("Uncaught Exception:", err);
@@ -116,6 +117,9 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+      // Start the in-process 12-hour aging-notification scheduler.
+      // Skips per-recipient if no SendGrid key set (sendEmail no-ops gracefully).
+      startAgingScheduler();
     },
   );
 })();

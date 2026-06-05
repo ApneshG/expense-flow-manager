@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format, isWithinInterval, parseISO, differenceInDays, startOfMonth, endOfMonth } from "date-fns";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign, Send, Archive, AlertOctagon, Filter, Check, X, CalendarIcon, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,6 +46,15 @@ export default function FinancePage() {
   const [onHoldBulkActionType, setOnHoldBulkActionType] = useState<"paid" | "needs_revision" | null>(null);
 
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRequest | null>(null);
+
+  // Deep-link from email: open the dialog when URL has ?id=<expenseId>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (!id) return;
+    const target = expenses.find(e => e.id === id);
+    if (target) setSelectedExpense(target);
+  }, [expenses]);
 
   if (!currentUser || currentUser.role !== "finance_head") {
     return <div className="p-8 text-center text-muted-foreground">Access denied. Finance role required.</div>;

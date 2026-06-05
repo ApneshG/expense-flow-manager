@@ -197,7 +197,7 @@ export async function sendExpenseCreatedEmail(
         <p style="margin: 8px 0; color: #16a34a;"><strong>Expected Reimbursement:</strong> ${reimbursementDate}</p>
       </div>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${expenseUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+        <a href="${expenseUrl}?id=${expenseId}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
           View Request
         </a>
       </div>
@@ -232,7 +232,7 @@ export async function sendExpenseCreatedEmail(
         <p style="margin: 8px 0; color: #dc2626;"><strong>Action Deadline:</strong> ${actionDeadline}</p>
       </div>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${hodUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+        <a href="${hodUrl}?id=${expenseId}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
           Review Request
         </a>
       </div>
@@ -281,7 +281,7 @@ export async function sendHoDActionEmail(
         ${hodComment ? `<p style="margin: 8px 0; color: #1e293b;"><strong>Comments:</strong> ${hodComment}</p>` : ""}
       </div>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${expenseUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+        <a href="${expenseUrl}?id=${expenseId}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
           View Details
         </a>
       </div>
@@ -329,8 +329,8 @@ export async function sendFinanceNotificationEmail(
         <p style="margin: 8px 0; color: #dc2626;"><strong>Action Deadline:</strong> ${actionDeadline}</p>
       </div>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${financeUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
-          Review & Process
+        <a href="${financeUrl}?id=${expenseId}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+          Review &amp; Process
         </a>
       </div>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
@@ -381,7 +381,7 @@ export async function sendFinanceActionEmail(
         ${financeComment ? `<p style="margin: 8px 0; color: #1e293b;"><strong>Comments:</strong> ${financeComment}</p>` : ""}
       </div>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${expenseUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+        <a href="${expenseUrl}?id=${expenseId}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
           View Details
         </a>
       </div>
@@ -393,4 +393,134 @@ export async function sendFinanceActionEmail(
   `;
 
   return sendEmail(employeeEmail, `Expense Request ${statusText} - ID: ${expenseId}`, html);
+}
+
+// ---- Aging notifications ----
+
+type StuckRow = {
+  expenseId: string;
+  amount: number;
+  category: string;
+  description: string;
+  employeeName: string;
+  daysWaiting: number;
+};
+
+function stuckRowsHtml(rows: StuckRow[], approveUrl: string): string {
+  if (rows.length === 0) return "";
+  return rows
+    .map(
+      r => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 8px; color: #475569; font-size: 13px;">${r.expenseId}</td>
+          <td style="padding: 8px; color: #1e293b; font-size: 13px;">${r.employeeName}</td>
+          <td style="padding: 8px; color: #475569; font-size: 13px;">${r.category}</td>
+          <td style="padding: 8px; color: #1e293b; font-size: 13px; text-align: right;">$${r.amount.toFixed(2)}</td>
+          <td style="padding: 8px; color: #dc2626; font-size: 13px; text-align: right;"><strong>${r.daysWaiting}d</strong></td>
+          <td style="padding: 8px; text-align: right;"><a href="${approveUrl}?id=${r.expenseId}" style="color: #2563eb; font-size: 12px;">View &rarr;</a></td>
+        </tr>`,
+    )
+    .join("");
+}
+
+export async function sendHoDAgingReminder(
+  hodEmail: string,
+  hodName: string,
+  rows: StuckRow[],
+): Promise<boolean> {
+  if (rows.length === 0) return false;
+  const baseUrl = getBaseUrl();
+  const approveUrl = `${baseUrl}/approvals`;
+  const totalAmt = rows.reduce((s, r) => s + r.amount, 0);
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; width: 40px; height: 40px; background: #2563eb; border-radius: 10px; color: white; font-size: 24px; font-weight: bold; line-height: 40px;">A</div>
+        <span style="font-size: 24px; font-weight: bold; margin-left: 10px; vertical-align: middle;">Avi Tech</span>
+      </div>
+      <h2 style="color: #1e293b;">Hi ${hodName},</h2>
+      <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+        You have <strong>${rows.length}</strong> expense ${rows.length === 1 ? "request" : "requests"} (totalling <strong>$${totalAmt.toFixed(2)}</strong>) waiting on your approval for more than a day.
+      </p>
+      <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+        <p style="margin: 0; color: #92400e; font-size: 14px;">These are blocking your team. Please review at your earliest.</p>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        <thead>
+          <tr style="background: #f8fafc;">
+            <th style="padding: 8px; text-align: left; color: #475569; font-size: 12px;">ID</th>
+            <th style="padding: 8px; text-align: left; color: #475569; font-size: 12px;">Employee</th>
+            <th style="padding: 8px; text-align: left; color: #475569; font-size: 12px;">Category</th>
+            <th style="padding: 8px; text-align: right; color: #475569; font-size: 12px;">Amount</th>
+            <th style="padding: 8px; text-align: right; color: #475569; font-size: 12px;">Age</th>
+            <th style="padding: 8px; text-align: right; color: #475569; font-size: 12px;">Link</th>
+          </tr>
+        </thead>
+        <tbody>${stuckRowsHtml(rows, approveUrl)}</tbody>
+      </table>
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${approveUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+          Open Pending Approvals
+        </a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+      <p style="color: #94a3b8; font-size: 12px; text-align: center;">
+        ${APP_NAME} &bull; Daily aging reminder &bull; Threshold: 1 day
+      </p>
+    </div>
+  `;
+
+  return sendEmail(hodEmail, `[Action Required] ${rows.length} expense ${rows.length === 1 ? "request" : "requests"} aging in your queue`, html);
+}
+
+export async function sendCFOAgingReminder(
+  cfoEmail: string,
+  cfoName: string,
+  rows: StuckRow[],
+): Promise<boolean> {
+  if (rows.length === 0) return false;
+  const baseUrl = getBaseUrl();
+  const financeUrl = `${baseUrl}/finance`;
+  const totalAmt = rows.reduce((s, r) => s + r.amount, 0);
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; width: 40px; height: 40px; background: #2563eb; border-radius: 10px; color: white; font-size: 24px; font-weight: bold; line-height: 40px;">A</div>
+        <span style="font-size: 24px; font-weight: bold; margin-left: 10px; vertical-align: middle;">Avi Tech</span>
+      </div>
+      <h2 style="color: #1e293b;">Hi ${cfoName},</h2>
+      <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+        You have <strong>${rows.length}</strong> HoD-approved expense ${rows.length === 1 ? "request" : "requests"} (totalling <strong>$${totalAmt.toFixed(2)}</strong>) waiting on payment for more than 3 days.
+      </p>
+      <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+        <p style="margin: 0; color: #991b1b; font-size: 14px;">These are overdue for finance action. Please process or send back.</p>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        <thead>
+          <tr style="background: #f8fafc;">
+            <th style="padding: 8px; text-align: left; color: #475569; font-size: 12px;">ID</th>
+            <th style="padding: 8px; text-align: left; color: #475569; font-size: 12px;">Employee</th>
+            <th style="padding: 8px; text-align: left; color: #475569; font-size: 12px;">Category</th>
+            <th style="padding: 8px; text-align: right; color: #475569; font-size: 12px;">Amount</th>
+            <th style="padding: 8px; text-align: right; color: #475569; font-size: 12px;">Age</th>
+            <th style="padding: 8px; text-align: right; color: #475569; font-size: 12px;">Link</th>
+          </tr>
+        </thead>
+        <tbody>${stuckRowsHtml(rows, financeUrl)}</tbody>
+      </table>
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${financeUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+          Open Finance Review
+        </a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+      <p style="color: #94a3b8; font-size: 12px; text-align: center;">
+        ${APP_NAME} &bull; Daily aging reminder &bull; Threshold: 3 days
+      </p>
+    </div>
+  `;
+
+  return sendEmail(cfoEmail, `[Action Required] ${rows.length} payment ${rows.length === 1 ? "request" : "requests"} aging in your queue`, html);
 }

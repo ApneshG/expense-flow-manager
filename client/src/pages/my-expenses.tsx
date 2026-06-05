@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Clock, CheckCircle2, XCircle, AlertCircle, Banknote, Filter, FileText, Search, Download } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ExpenseDetailsDialog } from "@/components/expense-details-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,15 @@ export default function MyExpensesPage() {
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRequest | null>(null);
+
+  // Deep-link from email: open the dialog when URL has ?id=<expenseId>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (!id) return;
+    const target = expenses.find(e => e.id === id);
+    if (target) setSelectedExpense(target);
+  }, [expenses]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 

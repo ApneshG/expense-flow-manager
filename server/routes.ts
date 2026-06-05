@@ -14,6 +14,7 @@ import {
   sendFinanceActionEmail
 } from "./email";
 import { askCopilot, isCopilotConfigured } from "./copilot";
+import { runAgingCheck } from "./aging";
 
 declare global {
   namespace Express {
@@ -480,6 +481,18 @@ export async function registerRoutes(
       res.json({ success: true, message: "Policy published. All users will see the update on next page load." });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ---- Aging notifications: admin can trigger a check on-demand ----
+  app.post("/api/admin/aging-check", authMiddleware, adminOnly, async (req, res) => {
+    try {
+      const force = req.body?.force === true;
+      const result = await runAgingCheck({ force });
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("[Aging] manual trigger error:", error);
+      res.status(500).json({ message: error.message || "Aging check failed" });
     }
   });
 

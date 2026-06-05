@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { format, isWithinInterval, parseISO, differenceInDays } from "date-fns";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, Search, CalendarIcon, Download, ArrowUpDown, Paperclip, AlertCircle, Zap, Clock, Activity, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
@@ -37,6 +37,15 @@ export default function ApprovalsPage() {
   const [isOnHoldBulkDialogOpen, setIsOnHoldBulkDialogOpen] = useState(false);
   const [onHoldBulkActionType, setOnHoldBulkActionType] = useState<"approve" | "reject" | "send_back" | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRequest | null>(null);
+
+  // Deep-link from email: open the dialog when URL has ?id=<expenseId>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (!id) return;
+    const target = expenses.find(e => e.id === id);
+    if (target) setSelectedExpense(target);
+  }, [expenses]);
 
   // New Filters & Sort
   const [searchTerm, setSearchTerm] = useState("");
