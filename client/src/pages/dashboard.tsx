@@ -824,6 +824,317 @@ export default function Dashboard() {
 
   // 3. Finance & Admin Dashboard (CFO View)
   if (currentUser.role === "finance_head") {
+    // ---- CFO Dashboard data ----
+    const PAID = ["paid"];
+    const COMMITTED_UNPAID_FH = ["pending_hod", "needs_revision", "pending_finance", "on_hold"];
+    const financeQueueFH = expenses.filter(e => e.status === "pending_finance");
+
+    // Row 1: Monthly Payout Trend (last 6 months)
+    const months6FH = eachMonthOfInterval({ start: subMonths(new Date(), 5), end: new Date() });
+    const monthlyTrendFH = months6FH.map(m => {
+      const mStart = startOfMonth(m), mEnd = endOfMonth(m);
+      const total = expenses
+        .filter(e => {
+          if (!PAID.includes(e.status)) return false;
+          const ref = e.paymentDate || e.financeActionDate;
+          if (!ref) return false;
+          const d = parseISO(ref);
+          return isWithinInterval(d, { start: mStart, end: mEnd });
+        })
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      return { name: format(m, "MMM"), amount: total };
+    });
+
+    // Row 1: Department Spend Ranking (top 5)
+    const deptSpendFH = departments.map(d => {
+      const paid = expenses
+        .filter(e => e.departmentId === d.id && PAID.includes(e.status))
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const committed = expenses
+        .filter(e => e.departmentId === d.id && COMMITTED_UNPAID_FH.includes(e.status))
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const total = paid + committed;
+      const pctVal = d.annualBudget > 0 ? (total / d.annualBudget) * 100 : 0;
+      return {
+        name: d.name,
+        total,
+        pct: Number(pctVal.toFixed(1)),
+        fill: pctVal >= 90 ? "#ef4444" : pctVal >= 80 ? "#f59e0b" : "#3b82f6",
+      };
+    }).sort((a, b) => b.total - a.total).slice(0, 5);
+
+    // Row 1: Stage TAT
+    const paidExpensesFH = expenses.filter(e => PAID.includes(e.status));
+    const tatDataFH = (() => {
+      const subToHod: number[] = [];
+      const hodToPaid: number[] = [];
+      paidExpensesFH.forEach(e => {
+        const created = e.createdAt ? parseISO(e.createdAt) : null;
+        const hodAct = e.hodActionDate ? parseISO(e.hodActionDate) : null;
+        const finAct = e.financeActionDate ? parseISO(e.financeActionDate) : (e.paymentDate ? parseISO(e.paymentDate) : null);
+        if (created && hodAct) subToHod.push(Math.max(0, differenceInDays(hodAct, created)));
+        if (hodAct && finAct) hodToPaid.push(Math.max(0, differenceInDays(finAct, hodAct)));
+      });
+      const avg = (arr: number[]) => arr.length ? arr.reduce((s, n) => s + n, 0) / arr.length : 0;
+      return [
+        { stage: "Submitted → HoD", days: Number(avg(subToHod).toFixed(1)), fill: "#3b82f6" },
+        { stage: "HoD → Paid",       days: Number(avg(hodToPaid).toFixed(1)), fill: "#10b981" },
+      ];
+    })();
+
+    // Row 2: Top 5 Largest Pending Payouts
+    const top5PendingFH = [...financeQueueFH]
+      .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))
+      .slice(0, 5)
+      .map(e => ({
+        ...e,
+        employeeName: users.find(u => u.id === e.employeeId)?.name || "Unknown",
+        deptName: departments.find(d => d.id === e.departmentId)?.name || "—",
+        ageDays: e.hodActionDate
+          ? differenceInDays(new Date(), parseISO(e.hodActionDate))
+          : (e.createdAt ? differenceInDays(new Date(), parseISO(e.createdAt)) : 0),
+      }));
+
+    // Row 3: Recent Activity (last 10 finance-stage entries)
+    type ActFH = { expenseId: string; action: string; actorName: string; timestamp: string; details?: string | null; amount: number; employeeName: string };
+    const activityListFH: ActFH[] = [];
+    expenses.forEach(e => {
+      (e.auditLog || []).forEach(log => {
+        if (/paid|hold|sent back|approved|rejected/i.test(log.action)) {
+          activityListFH.push({
+            expenseId: e.id,
+            action: log.action,
+            actorName: log.actorName,
+            timestamp: log.timestamp,
+            details: log.details,
+            amount: Number(e.amount) || 0,
+            employeeName: users.find(u => u.id === e.employeeId)?.name || "Unknown",
+          });
+        }
+      });
+    });
+    const recentActivityFH = activityListFH
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 10);
+
+    // Row 3: Payment Method donut
+    const pmtTotals: Record<string, number> = {};
+    paidExpensesFH.forEach(e => {
+      const mode = e.paymentMode || "Unspecified";
+      pmtTotals[mode] = (pmtTotals[mode] || 0) + (Number(e.amount) || 0);
+    });
+    const PMT_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#64748b"];
+    const paymentMethodDataFH = Object.entries(pmtTotals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({ name, value, fill: PMT_COLORS[i % PMT_COLORS.length] }));
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-display font-bold">Finance Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Enterprise-wide spend, pipeline and activity overview.</p>
+        </div>
+
+        {/* Row 1: 3 charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Payout Trend</CardTitle>
+              <CardDescription>Last 6 months · paid amounts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={monthlyTrendFH} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(241,245,249,0.5)" }}
+                    contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                    formatter={(value: number) => [`$${Number(value).toLocaleString()}`, "Paid"]}
+                  />
+                  <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} barSize={28} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Department Spend Ranking</CardTitle>
+              <CardDescription>Top 5 by Paid + Committed Unpaid</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {deptSpendFH.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-8 text-center">No departments yet.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(160, deptSpendFH.length * 48)}>
+                  <BarChart data={deptSpendFH} layout="vertical" margin={{ top: 8, right: 70, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <YAxis dataKey="name" type="category" width={90} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#0f172a" }} />
+                    <Tooltip
+                      cursor={{ fill: "transparent" }}
+                      contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                      formatter={(_v: number, _k: string, p: any) => [
+                        `$${Number(p.payload.total).toLocaleString()} · ${p.payload.pct}% of budget`,
+                        "Spend",
+                      ]}
+                    />
+                    <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={22}>
+                      {deptSpendFH.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                      <LabelList dataKey="total" position="right" formatter={(v: number) => `$${Number(v).toLocaleString()}`} className="text-xs fill-slate-700" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Stage Turnaround</CardTitle>
+              <CardDescription>Avg days at each approval stage</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={tatDataFH} margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="stage" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `${v}d`} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(241,245,249,0.5)" }}
+                    contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                    formatter={(value: number) => [`${value} days`, "Avg"]}
+                  />
+                  <Bar dataKey="days" radius={[4, 4, 0, 0]} barSize={42}>
+                    {tatDataFH.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                    <LabelList dataKey="days" position="top" formatter={(v: number) => `${v}d`} className="text-xs fill-slate-700" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 2: Top 5 Largest Pending Payouts */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top 5 Largest Pending Payouts</CardTitle>
+            <CardDescription>Biggest items currently awaiting payment — prioritize these</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {top5PendingFH.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-6 text-center">No pending payouts.</div>
+            ) : (
+              <div className="space-y-2">
+                {top5PendingFH.map((e, idx) => (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border bg-muted/10 hover:bg-muted/30 cursor-pointer transition-colors"
+                    onClick={() => setSelectedExpense(e)}
+                  >
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                      #{idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{e.description}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {e.employeeName} · {e.deptName} · waiting {e.ageDays} {e.ageDays === 1 ? "day" : "days"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold">${Number(e.amount).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{e.category}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Row 3: Recent Activity + Payment Method */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>Last 10 approval / payment actions across the company</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentActivityFH.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-6 text-center">No recent activity.</div>
+              ) : (
+                <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                  {recentActivityFH.map((a, i) => (
+                    <div key={i} className="flex items-start gap-3 text-sm border-l-2 border-muted pl-3 py-1.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <span className="font-medium">{a.action}</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{format(parseISO(a.timestamp), "MMM d, h:mm a")}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {a.actorName} · ${a.amount.toLocaleString()} ({a.employeeName})
+                        </div>
+                        {a.details && <div className="text-xs italic text-muted-foreground/80 mt-0.5 truncate">"{a.details}"</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Methods</CardTitle>
+              <CardDescription>Disbursed amount by method</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {paymentMethodDataFH.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-12 text-center">No payments yet.</div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={paymentMethodDataFH}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={75}
+                        paddingAngle={2}
+                      >
+                        {paymentMethodDataFH.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                        formatter={(v: number) => [`$${Number(v).toLocaleString()}`, "Amount"]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="grid grid-cols-1 gap-1 mt-2 text-xs">
+                    {paymentMethodDataFH.map(d => (
+                      <div key={d.name} className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: d.fill }} />
+                        <span className="text-slate-600 truncate">{d.name}</span>
+                        <span className="text-slate-400 ml-auto">${d.value.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Old finance_head branch (kept as dead code path under unreachable role for now)
+  if (currentUser.role === "__legacy_finance__") {
     const paidExpenses = expenses.filter(e => {
         if (e.status !== 'paid') return false;
         if (!dateRange?.from) return true;

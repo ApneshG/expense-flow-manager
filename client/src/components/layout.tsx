@@ -48,7 +48,8 @@ export function Sidebar() {
     { label: "Drafts", href: "/drafts", icon: FileText, roles: ["employee"] },
     { label: "Pending Approvals", href: "/approvals", icon: Users, roles: ["hod"] },
     { label: "Past Approvals", href: "/old-approvals", icon: History, roles: ["hod"] },
-    { label: "Finance Review", href: "/finance", icon: PieChart, roles: ["finance_head"] },
+    { label: "Dashboard", href: "/", icon: PieChart, roles: ["finance_head"] },
+    { label: "Finance Review", href: "/finance", icon: CreditCard, roles: ["finance_head"] },
     { label: "Old Expenses", href: "/all-expenses", icon: History, roles: ["finance_head"] },
     { label: "All Expenses", href: "/admin/expenses", icon: FileText, roles: ["admin"] },
     { label: "Data Management", href: "/admin/data", icon: Settings, roles: ["admin"] },
@@ -98,7 +99,7 @@ export function Sidebar() {
 const DEV_ROLES = [
   { label: "Employee", userId: "u-emp-1", role: "employee", defaultPage: "/" },
   { label: "HoD", userId: "u-hod-eng", role: "hod", defaultPage: "/approvals" },
-  { label: "Finance", userId: "u-fin-1", role: "finance_head", defaultPage: "/finance" },
+  { label: "Finance", userId: "u-fin-1", role: "finance_head", defaultPage: "/" },
   { label: "Admin", userId: "u-admin", role: "admin", defaultPage: "/admin" },
 ] as const;
 
