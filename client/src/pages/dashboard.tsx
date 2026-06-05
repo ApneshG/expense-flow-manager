@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
 import { Link } from "wouter";
+import { CopilotWidget } from "@/components/copilot-widget";
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -818,6 +819,7 @@ export default function Dashboard() {
                 </CardContent>
             </Card>
         </div>
+        <CopilotWidget scope="hod" />
       </div>
     );
   }
@@ -1129,6 +1131,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+        <CopilotWidget scope="cfo" />
       </div>
     );
   }

@@ -4,15 +4,16 @@ import { storage } from "./storage";
 import { CATEGORY_LIMITS } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { 
-  sendInvitationEmail, 
-  sendPasswordResetEmail, 
+import {
+  sendInvitationEmail,
+  sendPasswordResetEmail,
   sendInviteRequestNotification,
   sendExpenseCreatedEmail,
   sendHoDActionEmail,
   sendFinanceNotificationEmail,
   sendFinanceActionEmail
 } from "./email";
+import { askCopilot, isCopilotConfigured } from "./copilot";
 
 declare global {
   namespace Express {
@@ -479,6 +480,44 @@ export async function registerRoutes(
       res.json({ success: true, message: "Policy published. All users will see the update on next page load." });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // ---- Copilot (LLM Q&A over expense data) ----
+  app.get("/api/copilot/status", authMiddleware, (_req, res) => {
+    res.json({ configured: isCopilotConfigured() });
+  });
+
+  app.post("/api/copilot", authMiddleware, async (req, res) => {
+    try {
+      const { scope, question, history } = req.body || {};
+      if (!scope || (scope !== "cfo" && scope !== "hod")) {
+        return res.status(400).json({ message: "scope must be 'cfo' or 'hod'" });
+      }
+      if (!question || typeof question !== "string" || !question.trim()) {
+        return res.status(400).json({ message: "question is required" });
+      }
+      if (question.length > 1000) {
+        return res.status(400).json({ message: "question is too long (max 1000 chars)" });
+      }
+      // Role-scope check: CFO scope -> finance_head or admin; HoD scope -> hod or admin
+      const role = req.user!.role;
+      if (scope === "cfo" && role !== "finance_head" && role !== "admin") {
+        return res.status(403).json({ message: "Only Finance Head or Admin can use the CFO copilot" });
+      }
+      if (scope === "hod" && role !== "hod" && role !== "admin") {
+        return res.status(403).json({ message: "Only an HoD or Admin can use the HoD copilot" });
+      }
+      const result = await askCopilot({
+        scope,
+        question: question.trim(),
+        history: Array.isArray(history) ? history : [],
+        userId: req.user!.id,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("[Copilot] route error:", error);
+      res.status(500).json({ message: error.message || "Copilot error" });
     }
   });
 
